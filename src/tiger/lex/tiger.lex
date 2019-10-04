@@ -113,9 +113,31 @@
 "|" {adjust(); return Parser::OR;}
 ":=" {adjust(); return Parser::ASSIGN;}
 
+ /* comment processing */
+"/*" {adjust(); pushCommentCondition();}
+<COMMENT>{
+  "/*" {adjust(); pushCommentCondition();}
+  "*/" {adjust(); popCommentCondition();}
+  \n {adjust(); errormsg.Newline();}
+  . {adjust();}
+}
+
  /* Definitions for ID, STRING, INT */
 [0-9]+ {adjust(); return Parser::INT;}
 [A-Za-z][A-Za-z0-9_]* {adjust(); return Parser::ID;}
-
+\" {adjust(); clearStringBuf(); begin(StartCondition__::STR);}
+<STR>{
+  "\\n" {adjustStr(); stringBuf_.push_back('\n');}
+  "\\t" {adjustStr(); stringBuf_.push_back('\t');}
+  "\\\\" {adjustStr(); stringBuf_.push_back('\\');}
+  "\\\"" {adjustStr(); stringBuf_.push_back('\"');}
+  [\\]([0-9]{3}) {adjustStr(); stringBuf_.push_back(to_char(matched()));}
+  [\\][\^][A-_] {adjustStr(); stringBuf_.push_back(control_character_to_char(matched()));}
+  /* "\\"[ \t\f\n]+"\\" {handle_line_feed_in_string(matched());} */
+  "\\"[ \t\f\n]+"\\" {adjustStr();}
+  \" {adjustStr(); setMatched(stringBuf_); begin(StartCondition__::INITIAL); return Parser::STRING;}
+  [ \-\.A-Za-z0-9]+ {adjustStr(); stringBuf_.append(matched());}
+  . {adjust(); errormsg.Error(errormsg.tokPos, "illegal token");}
+}
 
 . {adjust(); errormsg.Error(errormsg.tokPos, "illegal token");}
