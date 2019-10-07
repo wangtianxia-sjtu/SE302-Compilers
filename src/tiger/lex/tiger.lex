@@ -133,8 +133,7 @@
   "\\\"" {adjustStr(); stringBuf_.push_back('\"');}
   [\\]([0-9]{3}) {adjustStr(); stringBuf_.push_back(to_char(matched()));}
   [\\][\^][A-_] {adjustStr(); stringBuf_.push_back(control_character_to_char(matched()));}
-  /* "\\"[ \t\f\n]+"\\" {handle_line_feed_in_string(matched());} */
-  "\\"[ \t\f\n]+"\\" {adjustStr();}
+  "\\"[ \t\f\n]+"\\" {adjustStr(); handle_line_feed_in_string(matched());}
   \" {adjustStr(); setMatched(stringBuf_); begin(StartCondition__::INITIAL); return Parser::STRING;}
   [ \-\.A-Za-z0-9]+ {adjustStr(); stringBuf_.append(matched());}
   . {adjust(); errormsg.Error(errormsg.tokPos, "illegal token");}
