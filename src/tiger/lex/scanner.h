@@ -90,11 +90,8 @@ inline void Scanner::clearStringBuf() {
 }
 
 inline void Scanner::handle_line_feed_in_string(const std::string &s) {
-  /* TODO */
   size_t len = s.size();
   for (size_t i = 0; i < len; ++i) {
-    errormsg.tokPos = charPos_;
-    charPos_ += 1;
     if (s[i] == '\n') {
       errormsg.Newline();
     }
