@@ -47,7 +47,7 @@
 %left TIMES DIVIDE
 %left UMINUS
 
-%type <exp> exp expseq
+%type <exp> exp expseq expseq_in_let
 %type <explist> actuals  nonemptyactuals sequencing  sequencing_exps
 %type <var>  lvalue one oneormore
 %type <declist> decs decs_nonempty
@@ -75,6 +75,7 @@ program:  exp  {absyn_root = $1;};
 exp: INT {$$ = new A::IntExp(errormsg.tokPos, $1);}
   |  STRING {$$ = new A::StringExp(errormsg.tokPos, $1);}
   |  LPAREN expseq RPAREN {$$ = $2;}
+  |  LPAREN exp RPAREN {$$ = $2;}
   |  lvalue {$$ = new A::VarExp(errormsg.tokPos, $1);}
   |  NIL {$$ = new A::NilExp(errormsg.tokPos);}
   |  ID LPAREN actuals RPAREN {$$ = new A::CallExp(errormsg.tokPos, $1, $3);}
@@ -101,13 +102,19 @@ exp: INT {$$ = new A::IntExp(errormsg.tokPos, $1);}
   |  WHILE exp DO exp {$$ = new A::WhileExp(errormsg.tokPos, $2, $4);}
   |  FOR ID ASSIGN exp TO exp DO exp {$$ = new A::ForExp(errormsg.tokPos, $2, $4, $6, $8);}
   |  BREAK {$$ = new A::BreakExp(errormsg.tokPos);}
-  |  LET decs IN expseq END {$$ = new A::LetExp(errormsg.tokPos, $2, $4);}
+  |  LET decs IN expseq_in_let END {$$ = new A::LetExp(errormsg.tokPos, $2, $4);}
   |  ID LBRACK exp RBRACK OF exp {$$ = new A::ArrayExp(errormsg.tokPos, $1, $3, $6);}
   |  LPAREN RPAREN {$$ = new A::VoidExp(errormsg.tokPos);};
 
+expseq_in_let: sequencing {$$ = new A::SeqExp(errormsg.tokPos, $1);};
+
+sequencing: /* Empty sequencing */ {$$ = nullptr;}
+          | exp {$$ = new A::ExpList($1, nullptr);}
+          | exp SEMICOLON sequencing {$$ = new A::ExpList($1, $3);};
+
 expseq: sequencing_exps {$$ = new A::SeqExp(errormsg.tokPos, $1);};
 
-sequencing_exps: exp {$$ = new A::ExpList($1, nullptr);}
+sequencing_exps: exp SEMICOLON exp {$$ = new A::ExpList($1, new A::ExpList($3, nullptr));}
                | exp SEMICOLON sequencing_exps {$$ = new A::ExpList($1, $3);};
 
 actuals: /* No actuals */ {$$ = nullptr;}
