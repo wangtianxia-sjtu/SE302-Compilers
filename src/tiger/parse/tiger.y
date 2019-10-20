@@ -33,13 +33,19 @@
 %token 
   COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK 
   LBRACE RBRACE DOT 
-  PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE
-  AND OR ASSIGN
-  ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF 
+  ARRAY THEN TO END
   BREAK NIL
-  FUNCTION VAR TYPE
+  VAR
 
-%right UMINUS
+%nonassoc FUNCTION IF WHILE FOR TYPE OF DO LET IN
+%nonassoc ELSE
+%right ASSIGN
+%left OR
+%left AND
+%nonassoc EQ NEQ LT GT LE GE
+%left PLUS MINUS
+%left TIMES DIVIDE
+%left UMINUS
 
 %type <exp> exp expseq
 %type <explist> actuals  nonemptyactuals sequencing  sequencing_exps
@@ -73,6 +79,9 @@ exp: INT {$$ = new A::IntExp(errormsg.tokPos, $1);}
   |  NIL {$$ = new A::NilExp(errormsg.tokPos);}
   |  ID LPAREN actuals RPAREN {$$ = new A::CallExp(errormsg.tokPos, $1, $3);}
 
+  |  exp AND exp {$$ = new A::IfExp(errormsg.tokPos, $1, $3, new A::IntExp(errormsg.tokPos, 0));}
+  |  exp OR exp {$$ = new A::IfExp(errormsg.tokPos, $1, new A::IntExp(errormsg.tokPos, 1), $3);}
+
   |  exp PLUS exp {$$ = new A::OpExp(errormsg.tokPos, A::PLUS_OP, $1, $3);}
   |  exp MINUS exp {$$ = new A::OpExp(errormsg.tokPos, A::MINUS_OP, $1, $3);}
   |  exp TIMES exp {$$ = new A::OpExp(errormsg.tokPos, A::TIMES_OP, $1, $3);}
@@ -83,12 +92,12 @@ exp: INT {$$ = new A::IntExp(errormsg.tokPos, $1);}
   |  exp LE exp {$$ = new A::OpExp(errormsg.tokPos, A::LE_OP, $1, $3);}
   |  exp GT exp {$$ = new A::OpExp(errormsg.tokPos, A::GT_OP, $1, $3);}
   |  exp GE exp {$$ = new A::OpExp(errormsg.tokPos, A::GE_OP, $1, $3);}
-  |  MINUS exp %prec UMINUS {$$ = new A::OpExp(errormsg.tokPos, A::MINUS_OP, new IntExp(errormsg.tokPos, 0), $2);}
+  |  MINUS exp %prec UMINUS {$$ = new A::OpExp(errormsg.tokPos, A::MINUS_OP, new A::IntExp(errormsg.tokPos, 0), $2);}
 
   |  ID LBRACE rec RBRACE {$$ = new A::RecordExp(errormsg.tokPos, $1, $3);} /* Expressions like any{any=0}, see merge.tig */
   |  lvalue ASSIGN exp {$$ = new A::AssignExp(errormsg.tokPos, $1, $3);}
-  |  IF exp THEN exp {$$ = new A::IfExp(errormsg.tokPos, $2, $4, new A::NilExp(errormsg.tokPos));} /* Set Nil expression for empty else expression */
   |  IF exp THEN exp ELSE exp {$$ = new A::IfExp(errormsg.tokPos, $2, $4, $6);}
+  |  IF exp THEN exp {$$ = new A::IfExp(errormsg.tokPos, $2, $4, nullptr);}
   |  WHILE exp DO exp {$$ = new A::WhileExp(errormsg.tokPos, $2, $4);}
   |  FOR ID ASSIGN exp TO exp DO exp {$$ = new A::ForExp(errormsg.tokPos, $2, $4, $6, $8);}
   |  BREAK {$$ = new A::BreakExp(errormsg.tokPos);}
@@ -107,9 +116,19 @@ actuals: /* No actuals */ {$$ = nullptr;}
 nonemptyactuals: exp {$$ = new A::ExpList($1, nullptr);}
                | exp COMMA nonemptyactuals {$$ = new A::ExpList($1, $3);};
 
-lvalue: ID {$$ = new A::SimpleVar(errormsg.tokPos, $1);}
+/* lvalue: ID {$$ = new A::SimpleVar(errormsg.tokPos, $1);}
       | lvalue DOT ID {$$ = new A::FieldVar(errormsg.tokPos, $1, $3);}
-      | lvalue LBRACK exp RBRACK {$$ = new A::SubscriptVar(errormsg.tokPos, $1, $3);};
+      | lvalue LBRACK exp RBRACK {$$ = new A::SubscriptVar(errormsg.tokPos, $1, $3);}; */
+
+lvalue: ID {$$ = new A::SimpleVar(errormsg.tokPos, $1);}
+      | oneormore {$$ = $1;};
+
+oneormore: one {$$ = $1;}
+         | one DOT ID {$$ = new A::FieldVar(errormsg.tokPos, $1, $3);}
+         | one LBRACK exp RBRACK {$$ = new A::SubscriptVar(errormsg.tokPos, $1, $3);};
+
+one: ID DOT ID {$$ = new A::FieldVar(errormsg.tokPos, new A::SimpleVar(errormsg.tokPos, $1), $3);}
+   | ID LBRACK exp RBRACK {$$ = new A::SubscriptVar(errormsg.tokPos, new A::SimpleVar(errormsg.tokPos, $1), $3);};
 
 decs: /* Empty declarations */ {$$ = nullptr;}
     | decs_nonempty {$$ = $1;};
@@ -133,7 +152,7 @@ tyfields: /* Empty type fields */ {$$ = nullptr;}
         | tyfields_nonempty {$$ = $1;};
 
 tyfields_nonempty: field_one {$$ = new A::FieldList($1, nullptr);}
-                 | field_one COMMA tyfields_nonempty {$$ = new A::FieldList($1, $2);};
+                 | field_one COMMA tyfields_nonempty {$$ = new A::FieldList($1, $3);};
 
 field_one: ID COLON ID {$$ = new A::Field(errormsg.tokPos, $1, $3);};
 
