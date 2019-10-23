@@ -35,10 +35,8 @@
   LBRACE RBRACE DOT 
   ARRAY THEN TO END
   BREAK NIL
-  VAR
+  VAR IF ELSE FUNCTION WHILE FOR TYPE OF DO LET IN
 
-%nonassoc FUNCTION IF WHILE FOR TYPE OF DO LET IN
-%nonassoc ELSE
 %right ASSIGN
 %left OR
 %left AND
@@ -122,10 +120,6 @@ actuals: /* No actuals */ {$$ = nullptr;}
 
 nonemptyactuals: exp {$$ = new A::ExpList($1, nullptr);}
                | exp COMMA nonemptyactuals {$$ = new A::ExpList($1, $3);};
-
-/* lvalue: ID {$$ = new A::SimpleVar(errormsg.tokPos, $1);}
-      | lvalue DOT ID {$$ = new A::FieldVar(errormsg.tokPos, $1, $3);}
-      | lvalue LBRACK exp RBRACK {$$ = new A::SubscriptVar(errormsg.tokPos, $1, $3);}; */
 
 lvalue: ID {$$ = new A::SimpleVar(errormsg.tokPos, $1);}
       | oneormore {$$ = $1;};
