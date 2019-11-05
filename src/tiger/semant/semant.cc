@@ -242,13 +242,34 @@ TY::Ty *IfExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   }
   TY::Ty *thenTy = then->SemAnalyze(venv, tenv, labelcount);
   if (!thenTy) {
-    errormsg.Error(pos, "if integer required"); // TODO
+    errormsg.Error(pos, "then required");
+    return TY::VoidTy::Instance();
+  }
+  if (!elsee) {
+    // if ... then ...
+    if (!thenTy->IsSameType(TY::VoidTy::Instance())) {
+      errormsg.Error(pos, "then should produce no value");
+    }
+    return TY::VoidTy::Instance();
+  }
+  else {
+    // if ... then ... else ...
+    TY::Ty *elseTy = elsee->SemAnalyze(venv, tenv, labelcount);
+    if (!thenTy->IsSameType(elseTy)) {
+      errormsg.Error(pos, "then and else type mismatch");
+    }
+    return thenTy->ActualTy();
   }
 }
 
 TY::Ty *WhileExp::SemAnalyze(VEnvType venv, TEnvType tenv,
                              int labelcount) const {
   // TODO: Put your codes here (lab4).
+  TY::Ty *testTy = test->SemAnalyze(venv, tenv, labelcount);
+  if (!testTy->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "while test should be integer");
+  }
+  // TY::Ty TODO
   return TY::VoidTy::Instance();
 }
 
