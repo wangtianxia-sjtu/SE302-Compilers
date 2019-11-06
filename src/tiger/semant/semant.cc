@@ -1,5 +1,6 @@
 #include "tiger/semant/semant.h"
 #include "tiger/errormsg/errormsg.h"
+#include <set>
 
 extern EM::ErrorMsg errormsg;
 
@@ -27,6 +28,10 @@ static TY::FieldList *make_fieldlist(TEnvType tenv, A::FieldList *fields) {
   }
 
   TY::Ty *ty = tenv->Look(fields->head->typ);
+  if (ty == nullptr) {
+    errormsg.Error(fields->head->pos, "undefined type %s",
+                   fields->head->typ->Name().c_str());
+  }
   return new TY::FieldList(new TY::Field(fields->head->name, ty),
                            make_fieldlist(tenv, fields->tail));
 }
@@ -52,19 +57,20 @@ TY::Ty *SimpleVar::SemAnalyze(VEnvType venv, TEnvType tenv,
 TY::Ty *FieldVar::SemAnalyze(VEnvType venv, TEnvType tenv,
                              int labelcount) const {
   TY::Ty *varType = var->SemAnalyze(venv, tenv, labelcount);
-  if (varType->ActualTy()->kind != TY::Ty::Kind::RECORD) {
-    errormsg.Error(pos, "not a record variable");
+  varType = varType->ActualTy();
+  if (varType->kind != TY::Ty::Kind::RECORD) {
+    errormsg.Error(pos, "not a record type");
     return TY::VoidTy::Instance();
   }
   TY::RecordTy *recordTy = static_cast<TY::RecordTy *>(varType);
   TY::FieldList *fieldList = recordTy->fields;
   while (fieldList) {
-    if (fieldList->head->name->Name() == sym->Name()) {
+    if (!fieldList->head->name->Name().compare(sym->Name())) {
       return fieldList->head->ty;
     }
     fieldList = fieldList->tail;
   }
-  errormsg.Error(pos, "unknown field %s", sym->Name().c_str());
+  errormsg.Error(pos, "field %s doesn't exist", sym->Name().c_str());
   return TY::VoidTy::Instance();
 }
 
@@ -72,7 +78,7 @@ TY::Ty *SubscriptVar::SemAnalyze(VEnvType venv, TEnvType tenv,
                                  int labelcount) const {
   TY::Ty *varType = var->SemAnalyze(venv, tenv, labelcount);
   if (varType->ActualTy()->kind != TY::Ty::Kind::ARRAY) {
-    errormsg.Error(pos, "not an array variable");
+    errormsg.Error(pos, "array type required");
     return TY::VoidTy::Instance();
   }
   TY::Ty *subscriptType = subscript->SemAnalyze(venv, tenv, labelcount);
@@ -121,7 +127,7 @@ TY::Ty *CallExp::SemAnalyze(VEnvType venv, TEnvType tenv,
     A::Exp *arg_head = argList->head;
     TY::Ty *arg_type = arg_head->SemAnalyze(venv, tenv, labelcount);
     if (!type_head->IsSameType(arg_type)) {
-      errormsg.Error(pos, "parameter type mismatch");
+      errormsg.Error(pos, "para type mismatch");
     }
     formals = formals->tail;
     argList = argList->tail;
@@ -130,10 +136,10 @@ TY::Ty *CallExp::SemAnalyze(VEnvType venv, TEnvType tenv,
     errormsg.Error(pos, "missing parameters in function %s", func->Name().c_str());
   }
   if (argList) {
-    errormsg.Error(pos, "too many parameters in function %s", func->Name().c_str());
+    errormsg.Error(pos, "too many params in function %s", func->Name().c_str());
   }
   TY::Ty *result = funEntry->result;
-  if (!result)
+  if (result)
     return result->ActualTy();
   else
     return TY::VoidTy::Instance();
@@ -145,7 +151,7 @@ TY::Ty *OpExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
     TY::Ty *left_type = left->SemAnalyze(venv, tenv, labelcount);
     TY::Ty *right_type = right->SemAnalyze(venv, tenv, labelcount);
     if (!left_type->IsSameType(TY::IntTy::Instance()) || !right_type->IsSameType(TY::IntTy::Instance())) {
-      errormsg.Error(pos, "integer is required");
+      errormsg.Error(pos, "integer required");
       return TY::IntTy::Instance();
     }
   }
@@ -174,6 +180,7 @@ TY::Ty *RecordExp::SemAnalyze(VEnvType venv, TEnvType tenv,
       return TY::VoidTy::Instance();
     }
     else {
+      record_type = record_type->ActualTy();
       TY::RecordTy *this_record_type = static_cast<TY::RecordTy*>(record_type);
       TY::FieldList *fieldList = this_record_type->fields;
       A::EFieldList *eFieldList = fields;
@@ -223,13 +230,13 @@ TY::Ty *AssignExp::SemAnalyze(VEnvType venv, TEnvType tenv,
   TY::Ty *right_type = exp->SemAnalyze(venv, tenv, labelcount);
   TY::Ty *left_type = var->SemAnalyze(venv, tenv, labelcount);
   if (!left_type->IsSameType(right_type)) {
-    errormsg.Error(pos, "unmatched type");
+    errormsg.Error(pos, "unmatched assign exp");
   }
   if (var->kind == A::Var::SIMPLE) {
     A::SimpleVar *simpleVar = static_cast<A::SimpleVar*>(var);
     E::VarEntry *varEntry = static_cast<E::VarEntry*>(venv->Look(simpleVar->sym));
     if (varEntry->readonly) {
-      errormsg.Error(pos, "loop variable cannot be assigned");
+      errormsg.Error(pos, "loop variable can't be assigned");
     }
   }
   return TY::VoidTy::Instance();
@@ -237,7 +244,7 @@ TY::Ty *AssignExp::SemAnalyze(VEnvType venv, TEnvType tenv,
 
 TY::Ty *IfExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   TY::Ty *testTy = test->SemAnalyze(venv, tenv, labelcount);
-  if (!testTy || testTy->IsSameType(TY::IntTy::Instance())) {
+  if (!testTy || !testTy->IsSameType(TY::IntTy::Instance())) {
     errormsg.Error(pos, "if integer required");
   }
   TY::Ty *thenTy = then->SemAnalyze(venv, tenv, labelcount);
@@ -248,7 +255,7 @@ TY::Ty *IfExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   if (!elsee) {
     // if ... then ...
     if (!thenTy->IsSameType(TY::VoidTy::Instance())) {
-      errormsg.Error(pos, "then should produce no value");
+      errormsg.Error(pos, "if-then exp's body must produce no value");
     }
     return TY::VoidTy::Instance();
   }
@@ -256,7 +263,7 @@ TY::Ty *IfExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
     // if ... then ... else ...
     TY::Ty *elseTy = elsee->SemAnalyze(venv, tenv, labelcount);
     if (!thenTy->IsSameType(elseTy)) {
-      errormsg.Error(pos, "then and else type mismatch");
+      errormsg.Error(pos, "then exp and else exp type mismatch");
     }
     return thenTy->ActualTy();
   }
@@ -269,12 +276,27 @@ TY::Ty *WhileExp::SemAnalyze(VEnvType venv, TEnvType tenv,
   if (!testTy->IsSameType(TY::IntTy::Instance())) {
     errormsg.Error(pos, "while test should be integer");
   }
-  // TY::Ty TODO
+  TY::Ty *bodyTy = body->SemAnalyze(venv, tenv, labelcount);
+  if (!bodyTy->IsSameType(TY::VoidTy::Instance())) {
+    errormsg.Error(pos, "while body must produce no value");
+  }
   return TY::VoidTy::Instance();
 }
 
 TY::Ty *ForExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   // TODO: Put your codes here (lab4).
+  TY::Ty *loTy = lo->SemAnalyze(venv, tenv, labelcount);
+  TY::Ty *hiTy = hi->SemAnalyze(venv, tenv, labelcount);
+  if (!loTy || !loTy->IsSameType(TY::IntTy::Instance()) || !hiTy || !hiTy->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "for exp's range type is not integer");
+  }
+  venv->BeginScope();
+  venv->Enter(var, new E::VarEntry(TY::IntTy::Instance(), true));
+  TY::Ty *bodyTy = body->SemAnalyze(venv, tenv, labelcount);
+  if (!body || !bodyTy->IsSameType(TY::VoidTy::Instance())) {
+    errormsg.Error(pos, "for body is not no value");
+  }
+  venv->EndScope();
   return TY::VoidTy::Instance();
 }
 
@@ -286,13 +308,40 @@ TY::Ty *BreakExp::SemAnalyze(VEnvType venv, TEnvType tenv,
 
 TY::Ty *LetExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   // TODO: Put your codes here (lab4).
-  return TY::VoidTy::Instance();
+  A::DecList *this_dec_head = decs;
+  venv->BeginScope();
+  tenv->BeginScope();
+  while (this_dec_head) {
+    A::Dec* this_dec = this_dec_head->head;
+    this_dec->SemAnalyze(venv, tenv, labelcount);
+    this_dec_head = this_dec_head->tail;
+  }
+  TY::Ty *result = body->SemAnalyze(venv, tenv, labelcount);
+  venv->BeginScope();
+  tenv->BeginScope();
+  return result;
 }
 
 TY::Ty *ArrayExp::SemAnalyze(VEnvType venv, TEnvType tenv,
                              int labelcount) const {
   // TODO: Put your codes here (lab4).
-  return TY::VoidTy::Instance();
+  TY::Ty *arrTy = tenv->Look(typ);
+  if (!arrTy) {
+    errormsg.Error(pos, "undefined type %s", typ->Name().c_str());
+  }
+  if (!arrTy->ActualTy()->kind == TY::Ty::ARRAY) {
+    errormsg.Error(pos, "%s not an array type", typ->Name().c_str());
+  }
+  TY::ArrayTy *actualTy = static_cast<TY::ArrayTy*>(arrTy->ActualTy());
+  TY::Ty *sizeTy = size->SemAnalyze(venv, tenv, labelcount);
+  if (!sizeTy || !sizeTy->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "size must be an integer");
+  }
+  TY::Ty *initTy = init->SemAnalyze(venv, tenv, labelcount);
+  if (!initTy->IsSameType(actualTy->ty)) {
+    errormsg.Error(pos, "array type mismatch");
+  }
+  return actualTy;
 }
 
 TY::Ty *VoidExp::SemAnalyze(VEnvType venv, TEnvType tenv,
@@ -304,29 +353,146 @@ TY::Ty *VoidExp::SemAnalyze(VEnvType venv, TEnvType tenv,
 void FunctionDec::SemAnalyze(VEnvType venv, TEnvType tenv,
                              int labelcount) const {
   // TODO: Put your codes here (lab4).
+  A::FunDecList *fun_head = functions;
+  std::set<std::string> names;
+  while (fun_head) {
+    A::FunDec *this_fun = fun_head->head;
+    std::string name = this_fun->name->Name();
+    TY::Ty *resultTy = nullptr;
+    if (this_fun->result) {
+      resultTy = tenv->Look(this_fun->result);
+      if (!resultTy) {
+        errormsg.Error(pos, "undefined type %s", this_fun->result->Name().c_str());
+      }
+    }
+    if (!resultTy) {
+      resultTy = TY::VoidTy::Instance();
+    }
+    if (names.find(name) != names.end()) {
+      errormsg.Error(pos, "two functions have the same name");
+    }
+    else {
+      names.insert(name);
+      TY::TyList *formals = make_formal_tylist(tenv, this_fun->params);
+      E::FunEntry *funEntry = new E::FunEntry(formals, resultTy);
+      venv->Enter(this_fun->name, funEntry);
+    }
+    fun_head = fun_head->tail;
+  }
+  fun_head = functions;
+  while (fun_head) {
+    A::FunDec *this_fun = fun_head->head;
+    A::FieldList *this_field_list = this_fun->params;
+    venv->BeginScope();
+    while (this_field_list) {
+      venv->Enter(this_field_list->head->name, new E::VarEntry(tenv->Look(this_field_list->head->typ)));
+      this_field_list = this_field_list->tail;
+    }
+    TY::Ty *returnTy = this_fun->body->SemAnalyze(venv, tenv, labelcount);
+    E::FunEntry *funEntry = static_cast<E::FunEntry*>(venv->Look(this_fun->name));
+    if (!returnTy->IsSameType(funEntry->result)) {
+      if (funEntry->result->IsSameType(TY::VoidTy::Instance())) {
+        errormsg.Error(pos, "procedure returns value");
+      }
+      else {
+        errormsg.Error(pos, "return value mismatch");
+      }
+    }
+    venv->EndScope();
+    fun_head = fun_head->tail;
+  }
 }
 
 void VarDec::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   // TODO: Put your codes here (lab4).
+  if (venv->Look(var)) {
+    errormsg.Error(pos, "duplicate variables");
+    return;
+  }
+  TY::Ty *initTy = init->SemAnalyze(venv, tenv, labelcount);
+  if (typ) {
+    TY::Ty *type = tenv->Look(typ);
+    if (!type) {
+      errormsg.Error(pos, "undefined type %s", typ->Name().c_str());
+    }
+    else {
+      if (!initTy->IsSameType(type)) {
+        errormsg.Error(pos, "type mismatch");
+      }
+    }
+    venv->Enter(var, new E::VarEntry(type));
+  }
+  else {
+    if (initTy->ActualTy()->kind == TY::Ty::Kind::NIL) {
+      errormsg.Error(pos, "init should not be nil without type specified");
+    }
+    else {
+      venv->Enter(var, new E::VarEntry(initTy));
+    }
+  }
 }
 
 void TypeDec::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   // TODO: Put your codes here (lab4).
+  A::NameAndTyList *this_type = types;
+  std::set<std::string> type_string_set;
+
+  while (this_type) {
+    A::NameAndTy *this_type_head = this_type->head;
+    if (type_string_set.find(this_type_head->name->Name()) != type_string_set.end()) {
+      errormsg.Error(pos, "two types have the same name");
+    }
+    else {
+      type_string_set.insert(this_type_head->name->Name());
+      tenv->Enter(this_type_head->name, new TY::NameTy(this_type_head->name, nullptr));
+    }
+    this_type = this_type->tail;
+  }
+
+  this_type = types;
+  while (this_type) {
+    A::NameAndTy *this_type_head = this_type->head;
+    TY::Ty *ty = tenv->Look(this_type_head->name);
+    TY::NameTy *nameTy = static_cast<TY::NameTy*>(ty);
+    nameTy->ty = this_type_head->ty->SemAnalyze(tenv);
+    this_type = this_type->tail;
+  }
+
+  this_type = types;
+  while (this_type) {
+    A::NameAndTy *this_type_head = this_type->head;
+    TY::Ty *ty = tenv->Look(this_type_head->name);
+    if (!ty->ActualTy()) {
+      errormsg.Error(pos, "illegal type cycle");
+      break;
+    }
+    this_type = this_type->tail;
+  }
 }
 
 TY::Ty *NameTy::SemAnalyze(TEnvType tenv) const {
   // TODO: Put your codes here (lab4).
-  return TY::VoidTy::Instance();
+  TY::Ty *ty = tenv->Look(name);
+  if (!ty) {
+    errormsg.Error(pos, "undefined type %s", name->Name().c_str());
+    // return TY::IntTy::Instance();
+  }
+  return ty;
 }
 
 TY::Ty *RecordTy::SemAnalyze(TEnvType tenv) const {
   // TODO: Put your codes here (lab4).
-  return TY::VoidTy::Instance();
+  TY::FieldList *fieldList = make_fieldlist(tenv, record);
+  return new TY::RecordTy(fieldList);
 }
 
 TY::Ty *ArrayTy::SemAnalyze(TEnvType tenv) const {
   // TODO: Put your codes here (lab4).
-  return TY::VoidTy::Instance();
+  TY::Ty *arrayTy = tenv->Look(array);
+  if (!arrayTy) {
+    errormsg.Error(pos, "undefined type %s", array->Name().c_str());
+  }
+  return new TY::ArrayTy(arrayTy);
 }
 
 }  // namespace A
