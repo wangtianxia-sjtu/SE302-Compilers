@@ -45,7 +45,7 @@ TY::Ty *SimpleVar::SemAnalyze(VEnvType venv, TEnvType tenv,
   E::EnvEntry *envEntry = venv->Look(sym);
   if (!envEntry) {
     errormsg.Error(pos, "undefined variable %s", sym->Name().c_str());
-    return TY::VoidTy::Instance();
+    return TY::IntTy::Instance();
   }
   if (envEntry->kind == E::EnvEntry::FUN) {
     errormsg.Error(pos, "function variable %s is not a simple value", sym->Name().c_str());
@@ -86,7 +86,8 @@ TY::Ty *SubscriptVar::SemAnalyze(VEnvType venv, TEnvType tenv,
     errormsg.Error(pos, "integer required");
     return TY::VoidTy::Instance();
   }
-  return varType->ActualTy();
+  TY::Ty *elementType = (static_cast<TY::ArrayTy*>(varType->ActualTy()))->ty;
+  return elementType;
 }
 
 TY::Ty *VarExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
@@ -339,7 +340,7 @@ TY::Ty *ArrayExp::SemAnalyze(VEnvType venv, TEnvType tenv,
   }
   TY::Ty *initTy = init->SemAnalyze(venv, tenv, labelcount);
   if (!initTy->IsSameType(actualTy->ty)) {
-    errormsg.Error(pos, "array type mismatch");
+    errormsg.Error(pos, "type mismatch");
   }
   return actualTy;
 }
@@ -405,10 +406,6 @@ void FunctionDec::SemAnalyze(VEnvType venv, TEnvType tenv,
 
 void VarDec::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   // TODO: Put your codes here (lab4).
-  if (venv->Look(var)) {
-    errormsg.Error(pos, "duplicate variables");
-    return;
-  }
   TY::Ty *initTy = init->SemAnalyze(venv, tenv, labelcount);
   if (typ) {
     TY::Ty *type = tenv->Look(typ);
@@ -425,6 +422,7 @@ void VarDec::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   else {
     if (initTy->ActualTy()->kind == TY::Ty::Kind::NIL) {
       errormsg.Error(pos, "init should not be nil without type specified");
+      venv->Enter(var, new E::VarEntry(TY::IntTy::Instance()));
     }
     else {
       venv->Enter(var, new E::VarEntry(initTy));
