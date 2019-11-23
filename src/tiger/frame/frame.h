@@ -9,8 +9,42 @@
 
 namespace F {
 
+extern const int wordSize;
+
+TEMP::Map* tempMap();
+TEMP::TempList* registers();
+
+TEMP::TempList* specialregs();
+TEMP::TempList* argregs();
+TEMP::TempList* calleesaves();
+TEMP::TempList* callersaves();
+
+TEMP::Temp* SP();
+TEMP::Temp* FP();
+TEMP::Temp* RV();
+
+T::Exp* externalCall(std::string s, T::ExpList* args);
+
+T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm); // P267-269
+AS::InstrList* F_procEntryExit2(AS::InstrList* body); // P215
+AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269
+
+
 class Frame {
-  // Base class
+  // Base class, see P138
+  private:
+    std::string label;
+    TEMP::Label* name;
+    AccessList* formalList;
+    AccessList* localList; // the number of locals allocated so far
+
+  public:
+    Frame(TEMP::Label* name, U::BoolList* formals);
+    std::string GetLabel();
+    TEMP::Label* GetName();
+    AccessList* GetFormalList();
+    AccessList* GetLocalList();
+    Access* AllocLocal(bool escape);
 };
 
 class Access {
@@ -22,7 +56,7 @@ class Access {
   Access(Kind kind) : kind(kind) {}
 
   // Hints: You may add interface like
-  //        `virtual T::Exp* ToExp(T::Exp* framePtr) const = 0`
+  virtual T::Exp* ToExp(T::Exp* framePtr) const = 0;
 };
 
 class AccessList {
