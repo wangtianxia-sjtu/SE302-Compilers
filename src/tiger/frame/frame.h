@@ -32,19 +32,17 @@ AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269
 
 class Frame {
   // Base class, see P138
-  private:
-    std::string label;
-    TEMP::Label* name;
-    AccessList* formalList;
-    AccessList* localList; // the number of locals allocated so far
-
   public:
-    Frame(TEMP::Label* name, U::BoolList* formals);
-    std::string GetLabel();
-    TEMP::Label* GetName();
-    AccessList* GetFormalList();
-    AccessList* GetLocalList();
-    Access* AllocLocal(bool escape);
+    enum Kind { X64 };
+
+    Kind kind;
+
+    Frame(Kind kind) : kind(kind) {}
+    virtual std::string GetLabel() const = 0;
+    virtual TEMP::Label* GetName() const = 0;
+    virtual AccessList* GetFormalList() const = 0;
+    virtual AccessList* GetLocalList() const = 0;
+    virtual Access* AllocLocal(bool escape) const = 0;
 };
 
 class Access {

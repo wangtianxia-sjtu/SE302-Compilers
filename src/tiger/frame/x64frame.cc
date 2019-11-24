@@ -239,7 +239,23 @@ TEMP::Temp* R15() {
 
 class X64Frame : public Frame {
   // TODO: Put your codes here (lab6).
+  public:
+    std::string label; // name->Name()? TBD
+    TEMP::Label* name;
+    AccessList* formalList;
+    AccessList* localList; // the number of locals allocated so far
+    int size;
+
+    X64Frame(TEMP::Label* name, U::BoolList* formals) : Frame(X64), name(name) {
+      localList = nullptr;
+      size = 0;
+      // TODO
+    }
 };
+
+T::Exp* externalCall(std::string s, T::ExpList* args) {
+  return new T::CallExp(new T::NameExp(TEMP::NamedLabel(s)), args); // P169, no need to place static link
+}
 
 class InFrameAccess : public Access {
  public:
