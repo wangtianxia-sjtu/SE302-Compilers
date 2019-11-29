@@ -42,7 +42,7 @@ class Frame {
     virtual TEMP::Label* GetName() const = 0;
     virtual AccessList* GetFormalList() const = 0;
     virtual AccessList* GetLocalList() const = 0;
-    virtual Access* AllocLocal(bool escape) const = 0;
+    virtual Access* AllocLocal(bool escape) = 0;
 };
 
 class Access {

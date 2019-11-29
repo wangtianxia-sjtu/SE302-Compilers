@@ -239,18 +239,88 @@ TEMP::Temp* R15() {
 
 class X64Frame : public Frame {
   // TODO: Put your codes here (lab6).
+  private:
+    void AddToFormalList(Access* access) {
+      AccessList* tail = formalList;
+      if (!tail) {
+        formalList = new AccessList(access, nullptr);
+        return;
+      }
+      else {
+        while (tail->tail) {
+          tail = tail->tail;
+        }
+        tail->tail = new AccessList(access, nullptr);
+        return;
+      }
+      return;
+    }
+
+    void AddToPrologue(T::Stm* stm) {
+      if (!prologue) {
+        // prologue = new T::SeqStm(new T::Exp(new T::ConstExp()));
+        // TODO
+      }
+    }
+
   public:
     std::string label; // name->Name()? TBD
     TEMP::Label* name;
-    AccessList* formalList;
-    AccessList* localList; // the number of locals allocated so far
-    int size;
+    AccessList* formalList; // formal parameters list
+    AccessList* localList; // the number of locals allocated so far. TBD
+    int frameSize;
+    T::Stm* prologue; // view shift, move parameters to other places
 
     X64Frame(TEMP::Label* name, U::BoolList* formals) : Frame(X64), name(name) {
       localList = nullptr;
-      size = 0;
-      // TODO
+      formalList = nullptr;
+      frameSize = 0;
+
+      U::BoolList* formalsPtr = formals;
+
+      int num = 0;
+      
+      for (; formalsPtr; formalsPtr = formalsPtr->tail) {
+        // walk through formal paramters list
+        if (formalsPtr->head) {
+          // this parameter escapes
+          Access* access = AllocLocal(true);
+          // TODO
+        }
+        else {
+          // this parameter does not escape
+          // TODO
+        }
+      }
     }
+
+    std::string GetLabel() const override {
+      return label;
+    }
+
+    TEMP::Label* GetName() const override {
+      return name;
+    }
+
+    AccessList* GetFormalList() const override {
+      return formalList;
+    }
+
+    AccessList* GetLocalList() const override {
+      return localList;
+    }
+
+    Access* AllocLocal(bool escape) override {
+      if (escape) {
+        frameSize += wordSize;
+        return new InFrameAccess(-frameSize);
+      }
+      else {
+        return new InRegAccess(TEMP::Temp::NewTemp());
+      }
+    }
+
+
 };
 
 T::Exp* externalCall(std::string s, T::ExpList* args) {
