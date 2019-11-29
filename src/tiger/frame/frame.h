@@ -25,9 +25,9 @@ TEMP::Temp* RV();
 
 T::Exp* externalCall(std::string s, T::ExpList* args);
 
-T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm); // P267-269
-AS::InstrList* F_procEntryExit2(AS::InstrList* body); // P215
-AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269
+T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm); // P267-269 TODO
+AS::InstrList* F_procEntryExit2(AS::InstrList* body); // P215 TODO
+AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269 TODO
 
 
 class Frame {

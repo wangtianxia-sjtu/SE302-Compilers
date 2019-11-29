@@ -258,8 +258,10 @@ class X64Frame : public Frame {
 
     void AddToPrologue(T::Stm* stm) {
       if (!prologue) {
-        // prologue = new T::SeqStm(new T::Exp(new T::ConstExp()));
-        // TODO
+        prologue = new T::SeqStm(stm, nullptr);
+      }
+      else {
+        prologue = new T::SeqStm(prologue, stm);
       }
     }
 
@@ -284,13 +286,137 @@ class X64Frame : public Frame {
         // walk through formal paramters list
         if (formalsPtr->head) {
           // this parameter escapes
-          Access* access = AllocLocal(true);
-          // TODO
+          switch (num) {
+            case 0: {
+              Access* access = AllocLocal(true);
+              T::Stm* stm = new T::MoveStm(
+                new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(FP()), new T::ConstExp(-frameSize))),
+                new T::TempExp(RDI())
+              );
+              AddToPrologue(stm);
+              AddToFormalList(access);
+              break;
+            }
+            case 1: {
+              Access* access = AllocLocal(true);
+              T::Stm* stm = new T::MoveStm(
+                new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(FP()), new T::ConstExp(-frameSize))),
+                new T::TempExp(RSI())
+              );
+              AddToPrologue(stm);
+              AddToFormalList(access);
+              break;
+            }
+            case 2: {
+              Access* access = AllocLocal(true);
+              T::Stm* stm = new T::MoveStm(
+                new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(FP()), new T::ConstExp(-frameSize))),
+                new T::TempExp(RDX())
+              );
+              AddToPrologue(stm);
+              AddToFormalList(access);
+              break;
+            }
+            case 3: {
+              Access* access = AllocLocal(true);
+              T::Stm* stm = new T::MoveStm(
+                new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(FP()), new T::ConstExp(-frameSize))),
+                new T::TempExp(RCX())
+              );
+              AddToPrologue(stm);
+              AddToFormalList(access);
+              break;
+            }
+            case 4: {
+              Access* access = AllocLocal(true);
+              T::Stm* stm = new T::MoveStm(
+                new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(FP()), new T::ConstExp(-frameSize))),
+                new T::TempExp(R8())
+              );
+              AddToPrologue(stm);
+              AddToFormalList(access);
+              break;
+            }
+            case 5: {
+              Access* access = AllocLocal(true);
+              T::Stm* stm = new T::MoveStm(
+                new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(FP()), new T::ConstExp(-frameSize))),
+                new T::TempExp(R9())
+              );
+              AddToPrologue(stm);
+              AddToFormalList(access);
+              break;
+            }
+            default: {
+              Access* access = new InFrameAccess((num - 5) * wordSize);
+              AddToFormalList(access);
+              break;
+            }
+          }
         }
         else {
           // this parameter does not escape
-          // TODO
+          InRegAccess* inRegAccess = new InRegAccess(TEMP::Temp::NewTemp());
+          AddToFormalList(inRegAccess);
+          switch (num) {
+            case 0: {
+              T::Stm* stm = new T::MoveStm(
+                new T::TempExp(inRegAccess->reg),
+                new T::TempExp(RDI())
+              );
+              AddToPrologue(stm);
+              break;
+            }
+            case 1: {
+              T::Stm* stm = new T::MoveStm(
+                new T::TempExp(inRegAccess->reg),
+                new T::TempExp(RSI())
+              );
+              AddToPrologue(stm);
+              break;
+            }
+            case 2: {
+              T::Stm* stm = new T::MoveStm(
+                new T::TempExp(inRegAccess->reg),
+                new T::TempExp(RDX())
+              );
+              AddToPrologue(stm);
+              break;
+            }
+            case 3: {
+              T::Stm* stm = new T::MoveStm(
+                new T::TempExp(inRegAccess->reg),
+                new T::TempExp(RCX())
+              );
+              AddToPrologue(stm);
+              break;
+            }
+            case 4: {
+              T::Stm* stm = new T::MoveStm(
+                new T::TempExp(inRegAccess->reg),
+                new T::TempExp(R8())
+              );
+              AddToPrologue(stm);
+              break;
+            }
+            case 5: {
+              T::Stm* stm = new T::MoveStm(
+                new T::TempExp(inRegAccess->reg),
+                new T::TempExp(R9())
+              );
+              AddToPrologue(stm);
+              break;
+            }
+            default: {
+              T::Stm* stm = new T::MoveStm(
+                new T::TempExp(inRegAccess->reg),
+                new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(FP()), new T::ConstExp((num - 5) * wordSize)))
+              );
+              break;
+            }
+          }
         }
+        num++;
       }
     }
 
@@ -334,7 +460,7 @@ class InFrameAccess : public Access {
   InFrameAccess(int offset) : Access(INFRAME), offset(offset) {}
 
   T::Exp* ToExp(T::Exp* framePtr) const override {
-    return nullptr;
+    return new T::MemExp(new T::BinopExp(T::PLUS_OP, framePtr, new T::ConstExp(offset)));
   }
 };
 
@@ -345,8 +471,23 @@ class InRegAccess : public Access {
   InRegAccess(TEMP::Temp* reg) : Access(INREG), reg(reg) {}
 
   T::Exp* ToExp(T::Exp* framePtr) const override {
-    return nullptr;
+    return new T::TempExp(reg);
   }
 };
+
+T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm) {
+  // TODO
+  return stm;
+}
+
+AS::InstrList* F_procEntryExit2(AS::InstrList* body) {
+  // TODO
+  return nullptr;
+}
+
+AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body) {
+  // TODO
+  return nullptr;
+}
 
 }  // namespace F
