@@ -9,6 +9,10 @@
 
 namespace F {
 
+class Frame;
+class Access;
+class AccessList;
+
 extern const int wordSize;
 
 TEMP::Map* tempMap();

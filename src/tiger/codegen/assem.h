@@ -4,7 +4,6 @@
 #include <cstdio>
 #include <string>
 
-#include "tiger/frame/frame.h"
 #include "tiger/frame/temp.h"
 
 namespace AS {

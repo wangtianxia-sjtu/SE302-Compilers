@@ -55,7 +55,7 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
 
   AS::Proc* proc = F::F_procEntryExit3(procFrag->frame, allocation.il);
 
-  std::string procName = procFrag->frame->label->Name();
+  std::string procName = procFrag->frame->GetName()->Name();
   fprintf(out, ".globl %s\n", procName.c_str());
   fprintf(out, ".type %s, @function\n", procName.c_str());
   // prologue

@@ -32,6 +32,124 @@ namespace F {
 
 const int wordSize = 8;
 
+class InFrameAccess : public Access {
+ public:
+  int offset;
+
+  InFrameAccess(int offset) : Access(INFRAME), offset(offset) {}
+
+  T::Exp* ToExp(T::Exp* framePtr) const override {
+    return new T::MemExp(new T::BinopExp(T::PLUS_OP, framePtr, new T::ConstExp(offset)));
+  }
+};
+
+class InRegAccess : public Access {
+ public:
+  TEMP::Temp* reg;
+
+  InRegAccess(TEMP::Temp* reg) : Access(INREG), reg(reg) {}
+
+  T::Exp* ToExp(T::Exp* framePtr) const override {
+    return new T::TempExp(reg);
+  }
+};
+
+TEMP::Temp* RSP() {
+  if (!rsp)
+    rsp = TEMP::Temp::NewTemp();
+  return rsp;
+}
+
+TEMP::Temp* RAX() {
+  if (!rax)
+    rax = TEMP::Temp::NewTemp();
+  return rax;
+}
+
+TEMP::Temp* RBP() {
+  if (!rbp)
+    rbp = TEMP::Temp::NewTemp();
+  return rbp;
+}
+
+TEMP::Temp* RBX() {
+  if (!rbx)
+    rbx = TEMP::Temp::NewTemp();
+  return rbx;
+}
+
+TEMP::Temp* RDI() {
+  if (!rdi)
+    rdi = TEMP::Temp::NewTemp();
+  return rdi;
+}
+
+TEMP::Temp* RSI() {
+  if (!rsi)
+    rsi = TEMP::Temp::NewTemp();
+  return rsi;
+}
+
+TEMP::Temp* RDX() {
+  if (!rdx)
+    rdx = TEMP::Temp::NewTemp();
+  return rdx;
+}
+
+TEMP::Temp* RCX() {
+  if (!rcx)
+    rcx = TEMP::Temp::NewTemp();
+  return rcx;
+}
+
+TEMP::Temp* R8() {
+  if (!r8)
+    r8 = TEMP::Temp::NewTemp();
+  return r8;
+}
+
+TEMP::Temp* R9() {
+  if (!r9)
+    r9 = TEMP::Temp::NewTemp();
+  return r9;
+}
+
+TEMP::Temp* R10() {
+  if (!r10)
+    r10 = TEMP::Temp::NewTemp();
+  return r10;
+}
+
+TEMP::Temp* R11() {
+  if (!r11)
+    r11 = TEMP::Temp::NewTemp();
+  return r11;
+}
+
+TEMP::Temp* R12() {
+  if (!r12)
+    r12 = TEMP::Temp::NewTemp();
+  return r12;
+}
+
+TEMP::Temp* R13() {
+  if (!r13)
+    r13 = TEMP::Temp::NewTemp();
+  return r13;
+}
+
+TEMP::Temp* R14() {
+  if (!r14)
+    r14 = TEMP::Temp::NewTemp();
+  return r14;
+}
+
+TEMP::Temp* R15() {
+  if (!r15)
+    r15 = TEMP::Temp::NewTemp();
+  return r15;
+}
+
 void tempInit() {
   tempMap();
   registers();
@@ -139,102 +257,6 @@ TEMP::Temp* FP() {
 
 TEMP::Temp* RV() {
   return RAX();
-}
-
-TEMP::Temp* RSP() {
-  if (!rsp)
-    rsp = TEMP::Temp::NewTemp();
-  return rsp;
-}
-
-TEMP::Temp* RAX() {
-  if (!rax)
-    rax = TEMP::Temp::NewTemp();
-  return rax;
-}
-
-TEMP::Temp* RBP() {
-  if (!rbp)
-    rbp = TEMP::Temp::NewTemp();
-  return rbp;
-}
-
-TEMP::Temp* RBX() {
-  if (!rbx)
-    rbx = TEMP::Temp::NewTemp();
-  return rbx;
-}
-
-TEMP::Temp* RDI() {
-  if (!rdi)
-    rdi = TEMP::Temp::NewTemp();
-  return rdi;
-}
-
-TEMP::Temp* RSI() {
-  if (!rsi)
-    rsi = TEMP::Temp::NewTemp();
-  return rsi;
-}
-
-TEMP::Temp* RDX() {
-  if (!rdx)
-    rdx = TEMP::Temp::NewTemp();
-  return rdx;
-}
-
-TEMP::Temp* RCX() {
-  if (!rcx)
-    rcx = TEMP::Temp::NewTemp();
-  return rcx;
-}
-
-TEMP::Temp* R8() {
-  if (!r8)
-    r8 = TEMP::Temp::NewTemp();
-  return r8;
-}
-
-TEMP::Temp* R9() {
-  if (!r9)
-    r9 = TEMP::Temp::NewTemp();
-  return r9;
-}
-
-TEMP::Temp* R10() {
-  if (!r10)
-    r10 = TEMP::Temp::NewTemp();
-  return r10;
-}
-
-TEMP::Temp* R11() {
-  if (!r11)
-    r11 = TEMP::Temp::NewTemp();
-  return r11;
-}
-
-TEMP::Temp* R12() {
-  if (!r12)
-    r12 = TEMP::Temp::NewTemp();
-  return r12;
-}
-
-TEMP::Temp* R13() {
-  if (!r13)
-    r13 = TEMP::Temp::NewTemp();
-  return r13;
-}
-
-TEMP::Temp* R14() {
-  if (!r14)
-    r14 = TEMP::Temp::NewTemp();
-  return r14;
-}
-
-TEMP::Temp* R15() {
-  if (!r15)
-    r15 = TEMP::Temp::NewTemp();
-  return r15;
 }
 
 class X64Frame : public Frame {
@@ -452,28 +474,6 @@ class X64Frame : public Frame {
 T::Exp* externalCall(std::string s, T::ExpList* args) {
   return new T::CallExp(new T::NameExp(TEMP::NamedLabel(s)), args); // P169, no need to place static link
 }
-
-class InFrameAccess : public Access {
- public:
-  int offset;
-
-  InFrameAccess(int offset) : Access(INFRAME), offset(offset) {}
-
-  T::Exp* ToExp(T::Exp* framePtr) const override {
-    return new T::MemExp(new T::BinopExp(T::PLUS_OP, framePtr, new T::ConstExp(offset)));
-  }
-};
-
-class InRegAccess : public Access {
- public:
-  TEMP::Temp* reg;
-
-  InRegAccess(TEMP::Temp* reg) : Access(INREG), reg(reg) {}
-
-  T::Exp* ToExp(T::Exp* framePtr) const override {
-    return new T::TempExp(reg);
-  }
-};
 
 T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm) {
   // TODO
