@@ -458,6 +458,10 @@ class X64Frame : public Frame {
       return localList;
     }
 
+    T::Stm* GetPrologue() const override {
+      return prologue;
+    }
+
     Access* AllocLocal(bool escape) override {
       if (escape) {
         frameSize += wordSize;
@@ -467,17 +471,22 @@ class X64Frame : public Frame {
         return new InRegAccess(TEMP::Temp::NewTemp());
       }
     }
-
-
 };
 
 T::Exp* externalCall(std::string s, T::ExpList* args) {
   return new T::CallExp(new T::NameExp(TEMP::NamedLabel(s)), args); // P169, no need to place static link
 }
 
+Frame* NewX64Frame(TEMP::Label* name, U::BoolList* formals) {
+  return new X64Frame(name, formals);
+}
+
 T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm) {
   // TODO
-  return stm;
+  T::Stm* prologue = frame->GetPrologue();
+  if (!prologue)
+    return stm;
+  return new T::SeqStm(prologue, stm);
 }
 
 AS::InstrList* F_procEntryExit2(AS::InstrList* body) {

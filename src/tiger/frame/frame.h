@@ -27,9 +27,11 @@ TEMP::Temp* SP();
 TEMP::Temp* FP();
 TEMP::Temp* RV();
 
+Frame* NewX64Frame(TEMP::Label* name, U::BoolList* formals);
+
 T::Exp* externalCall(std::string s, T::ExpList* args);
 
-T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm); // P267-269 TODO
+T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm); // P172 P267-269 TODO
 AS::InstrList* F_procEntryExit2(AS::InstrList* body); // P215 TODO
 AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269 TODO
 
@@ -47,6 +49,7 @@ class Frame {
     virtual AccessList* GetFormalList() const = 0;
     virtual AccessList* GetLocalList() const = 0;
     virtual Access* AllocLocal(bool escape) = 0;
+    virtual T::Stm* GetPrologue() const = 0;
 };
 
 class Access {
