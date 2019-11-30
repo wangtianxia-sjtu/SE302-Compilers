@@ -11,6 +11,8 @@
 #include "tiger/semant/types.h"
 #include "tiger/util/util.h"
 
+extern EM::ErrorMsg errormsg;
+
 namespace TR {
 
 class AccessList {
@@ -188,7 +190,10 @@ Level *Outermost() {
 }
 
 F::FragList *TranslateProgram(A::Exp *root) {
-  // TODO: Put your codes here (lab5).
+  // TODO: Needs Tr_procEntryExit and Tr_getResult here P173
+  Level* mainFrame = Outermost();
+  TEMP::Label* mainLabel = TEMP::NewLabel();
+  ExpAndTy result = root->Translate(E::BaseVEnv(), E::BaseTEnv(), mainFrame, mainLabel);
   return nullptr;
 }
 
@@ -219,15 +224,61 @@ namespace A {
 TR::ExpAndTy SimpleVar::Translate(S::Table<E::EnvEntry> *venv,
                                   S::Table<TY::Ty> *tenv, TR::Level *level,
                                   TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  E::EnvEntry *envEntry = venv->Look(sym);
+  if (!envEntry) {
+    errormsg.Error(pos, "undefined variable %s", sym->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::IntTy::Instance());
+  }
+  if (envEntry->kind == E::EnvEntry::FUN) {
+    errormsg.Error(pos, "function variable %s is not a simple value", sym->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+
+  /* ----------------------------------------------------------------------- */
+
+  TY::Ty* resultType = static_cast<E::VarEntry*>(envEntry)->ty;
+  TR::Level* resultLevel = static_cast<E::VarEntry*>(envEntry)->access->level;
+  T::Exp* framePtr = new T::TempExp(F::FP());
+  while (level != resultLevel) {
+    framePtr = new T::MemExp(new T::BinopExp(T::PLUS_OP, framePtr, new T::ConstExp(-F::wordSize))); // static link is the first in-frame parameter
+    level = level->parent;
+  }
+  T::Exp* resultPtr = static_cast<E::VarEntry*>(envEntry)->access->access->ToExp(framePtr);
+  return TR::ExpAndTy(new TR::ExExp(resultPtr), resultType);
 }
 
 TR::ExpAndTy FieldVar::Translate(S::Table<E::EnvEntry> *venv,
                                  S::Table<TY::Ty> *tenv, TR::Level *level,
                                  TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  TR::ExpAndTy varResult = var->Translate(venv, tenv, level, label);
+  TY::Ty* resultType = varResult.ty;
+  if (!resultType || resultType->ActualTy()->kind != TY::Ty::Kind::RECORD) {
+    errormsg.Error(pos, "not a record type");
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+  resultType = resultType->ActualTy();
+  TY::RecordTy* recordTy = static_cast<TY::RecordTy *>(resultType);
+  TY::FieldList* fieldList = recordTy->fields;
+  TY::Ty* fieldType = nullptr;
+  int order = 0;
+  while (fieldList) {
+    if (!fieldList->head->name->Name().compare(sym->Name())) {
+      fieldType = fieldList->head->ty;
+      break;
+    }
+    fieldList = fieldList->tail;
+    order++;
+  }
+  if (!fieldType) {
+    errormsg.Error(pos, "field %s doesn't exist", sym->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+
+  /* ----------------------------------------------------------------------- */
+
+  TR::Exp* exp = varResult.exp;
+  TR::Exp* fieldExp = new TR::ExExp(new T::MemExp(new T::BinopExp(T::PLUS_OP, exp->UnEx(), new T::ConstExp(order * F::wordSize))));
+  return TR::ExpAndTy(fieldExp, fieldType);
 }
 
 TR::ExpAndTy SubscriptVar::Translate(S::Table<E::EnvEntry> *venv,
