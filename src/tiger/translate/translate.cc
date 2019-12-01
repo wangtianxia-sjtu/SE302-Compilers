@@ -4,6 +4,7 @@
 #include <set>
 #include <string>
 #include <iostream>
+#include <vector>
 
 #include "tiger/errormsg/errormsg.h"
 #include "tiger/frame/temp.h"
@@ -12,6 +13,23 @@
 #include "tiger/util/util.h"
 
 extern EM::ErrorMsg errormsg;
+
+namespace {
+  F::FragList* globalFrags = nullptr;
+  void AddToGlobalFrags(F::Frag* newFrag) {
+    F::FragList* tail = globalFrags;
+    if (tail) {
+      while (tail->tail) {
+        tail = tail->tail;
+      }
+      tail->tail = new F::FragList(newFrag, nullptr);
+    }
+    else {
+      globalFrags = new F::FragList(newFrag, nullptr);
+    }
+  }
+  T::ExpList* ToExpList(const std::vector<TR::Exp *> &formalsVector);
+}
 
 namespace TR {
 
@@ -227,7 +245,7 @@ TR::ExpAndTy SimpleVar::Translate(S::Table<E::EnvEntry> *venv,
   E::EnvEntry *envEntry = venv->Look(sym);
   if (!envEntry) {
     errormsg.Error(pos, "undefined variable %s", sym->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::IntTy::Instance());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
   }
   if (envEntry->kind == E::EnvEntry::FUN) {
     errormsg.Error(pos, "function variable %s is not a simple value", sym->Name().c_str());
@@ -284,43 +302,129 @@ TR::ExpAndTy FieldVar::Translate(S::Table<E::EnvEntry> *venv,
 TR::ExpAndTy SubscriptVar::Translate(S::Table<E::EnvEntry> *venv,
                                      S::Table<TY::Ty> *tenv, TR::Level *level,
                                      TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  TR::ExpAndTy varResult = var->Translate(venv, tenv, level, label);
+  TY::Ty* varType = varResult.ty;
+  TR::Exp* varExp = varResult.exp;
+  if (!varType || varType->ActualTy()->kind != TY::Ty::Kind::ARRAY) {
+    errormsg.Error(pos, "array type required");
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+  varType = varType->ActualTy();
+  TY::ArrayTy* arrayTy = static_cast<TY::ArrayTy *>(varType);
+  TY::Ty* elementType = arrayTy->ty;
+  TR::ExpAndTy subscriptResult = subscript->Translate(venv, tenv, level, label);
+  TY::Ty* subscriptType = subscriptResult.ty;
+  TR::Exp* subscriptExp = subscriptResult.exp;
+  if (!subscriptType || !subscriptType->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "integer required");
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+
+  /* ----------------------------------------------------------------------- */
+
+  TR::Exp* resultExp = new TR::ExExp(
+                        new T::MemExp(
+                          new T::BinopExp(T::PLUS_OP, varExp->UnEx(), 
+                            new T::BinopExp(T::MUL_OP, subscriptExp->UnEx(), new T::ConstExp(F::wordSize)))));
+  return TR::ExpAndTy(resultExp, elementType);
 }
 
 TR::ExpAndTy VarExp::Translate(S::Table<E::EnvEntry> *venv,
                                S::Table<TY::Ty> *tenv, TR::Level *level,
                                TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  TR::ExpAndTy result = var->Translate(venv, tenv, level, label);
+  if (result.ty)
+    return TR::ExpAndTy(result.exp, result.ty->ActualTy());
+  return TR::ExpAndTy(result.exp, TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy NilExp::Translate(S::Table<E::EnvEntry> *venv,
                                S::Table<TY::Ty> *tenv, TR::Level *level,
                                TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  return TR::ExpAndTy(new TR::ExExp(new T::ConstExp(0)), TY::NilTy::Instance());
 }
 
 TR::ExpAndTy IntExp::Translate(S::Table<E::EnvEntry> *venv,
                                S::Table<TY::Ty> *tenv, TR::Level *level,
                                TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  return TR::ExpAndTy(new TR::ExExp(new T::ConstExp(i)), TY::IntTy::Instance());
 }
 
 TR::ExpAndTy StringExp::Translate(S::Table<E::EnvEntry> *venv,
                                   S::Table<TY::Ty> *tenv, TR::Level *level,
                                   TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  // TODO: P166-167
+  TEMP::Label* tempLabel = TEMP::NewLabel();
+  F::Frag* stringFrag = new F::StringFrag(tempLabel, s);
+  AddToGlobalFrags(stringFrag);
+  return TR::ExpAndTy(new TR::ExExp(new T::NameExp(tempLabel)), TY::StringTy::Instance());
 }
 
 TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
                                 S::Table<TY::Ty> *tenv, TR::Level *level,
                                 TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  std::vector<TR::Exp *> formalsVector;
+  bool valid = true;
+  E::EnvEntry* envEntry = venv->Look(func);
+  if (!envEntry) {
+    errormsg.Error(pos, "undefined function %s", func->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+  if (envEntry->kind == E::EnvEntry::VAR) {
+    errormsg.Error(pos, "%s is not a function", func->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+  E::FunEntry* funEntry = static_cast<E::FunEntry *>(envEntry);
+  TY::TyList* formals = funEntry->formals;
+  A::ExpList* argList = args;
+  while (formals && argList) {
+    TY::Ty* formalsHead = formals->head;
+    A::Exp* expHead = args->head;
+    TR::ExpAndTy expHeadResult = expHead->Translate(venv, tenv, level, label);
+    if (!formalsHead->IsSameType(expHeadResult.ty)) {
+      errormsg.Error(pos, "para type mismatch");
+      valid = false;
+    }
+    formalsVector.push_back(expHeadResult.exp);
+    formals = formals->tail;
+    argList = argList->tail;
+  }
+  TY::Ty *resultType = funEntry->result;
+  if (!resultType)
+    resultType = TY::VoidTy::Instance();
+  else
+    resultType = resultType->ActualTy();
+  if (formals) {
+    errormsg.Error(pos, "missing parameters in function %s", func->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+  if (argList) {
+    errormsg.Error(pos, "too many params in function %s", func->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+  if (!valid) {
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+
+  /* ----------------------------------------------------------------------- */
+
+  T::Exp* staticLink = new T::TempExp(F::FP());
+  while (level != funEntry->level) {
+    staticLink = new T::MemExp(new T::BinopExp(T::PLUS_OP, staticLink, new T::ConstExp(-F::wordSize)));
+    level = level->parent;
+  }
+  T::ExpList* expList = ToExpList(formalsVector);
+  TR::Exp* resultExp = nullptr;
+  if (funEntry->level->parent == nullptr) {
+    // External call, no static link
+    resultExp = new TR::ExExp(F::externalCall(funEntry->label->Name(), expList));
+  }
+  else {
+    // Add static link
+    expList = new T::ExpList(staticLink, expList);
+    resultExp = new TR::ExExp(new T::CallExp(new T::NameExp(funEntry->label), expList));
+  }
+  return TR::ExpAndTy(resultExp, resultType);
 }
 
 TR::ExpAndTy OpExp::Translate(S::Table<E::EnvEntry> *venv,
@@ -435,3 +539,26 @@ TY::Ty *ArrayTy::Translate(S::Table<TY::Ty> *tenv) const {
 }
 
 }  // namespace A
+
+namespace {
+  T::ExpList* ToExpList(const std::vector<TR::Exp *> &formalsVector) {
+    T::ExpList* result = nullptr;
+    T::ExpList* tail = nullptr;
+    std::size_t s = formalsVector.size();
+    if (s == 0)
+      return nullptr;
+    if (formalsVector[0])
+      result = new T::ExpList(formalsVector[0]->UnEx(), nullptr);
+    else
+      result = new T::ExpList(nullptr, nullptr);
+    tail = result;
+    for (std::size_t i = 1; i < s; ++i) {
+      if (formalsVector[i])
+        tail->tail = new T::ExpList(formalsVector[i]->UnEx(), nullptr);
+      else
+        tail->tail = new T::ExpList(nullptr, nullptr);
+      tail = tail->tail;
+    }
+    return result;
+  }
+}
