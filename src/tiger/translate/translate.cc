@@ -16,6 +16,7 @@ extern EM::ErrorMsg errormsg;
 
 namespace {
   F::FragList* globalFrags = nullptr;
+  const std::string stringEqual = "stringEqual";
   void AddToGlobalFrags(F::Frag* newFrag) {
     F::FragList* tail = globalFrags;
     if (tail) {
@@ -29,6 +30,8 @@ namespace {
     }
   }
   T::ExpList* ToExpList(const std::vector<TR::Exp *> &formalsVector);
+  TR::Exp* Calculate(A::Oper op, TR::Exp* left, TR::Exp* right);
+  TR::Exp* Conditional(A::Oper op, TR::Exp* left, TR::Exp* right, bool isString);
 }
 
 namespace TR {
@@ -430,16 +433,92 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
 TR::ExpAndTy OpExp::Translate(S::Table<E::EnvEntry> *venv,
                               S::Table<TY::Ty> *tenv, TR::Level *level,
                               TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
+  TR::Exp* leftExp = nullptr;
+  TR::Exp* rightExp = nullptr;
+  bool isString = false;
+  if (oper == A::PLUS_OP || oper == A::MINUS_OP || oper == A::TIMES_OP || oper == A::DIVIDE_OP) {
+    TR::ExpAndTy leftResult = left->Translate(venv, tenv, level, label);
+    TR::ExpAndTy rightResult = right->Translate(venv, tenv, level, label);
+    leftExp = leftResult.exp;
+    rightExp = rightResult.exp;
+    if (!leftResult.ty || !leftResult.ty->IsSameType(TY::IntTy::Instance())
+       || !rightResult.ty || !rightResult.ty->IsSameType(TY::IntTy::Instance())) {
+        errormsg.Error(pos, "integer required");
+        return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    }
+
+    /* ----------------------------------------------------------------------- */
+
+    TR::Exp* resultExp = Calculate(oper, leftExp, rightExp);
+    return TR::ExpAndTy(resultExp, TY::IntTy::Instance());
+  }
+
+  if (oper == A::EQ_OP || oper == A::NEQ_OP || oper == LT_OP || oper == LE_OP || oper == GT_OP || oper == GE_OP) {
+    TR::ExpAndTy leftResult = left->Translate(venv, tenv, level, label);
+    TR::ExpAndTy rightResult = right->Translate(venv, tenv, level, label);
+    leftExp = leftResult.exp;
+    rightExp = rightResult.exp;
+    if (!leftResult.ty || !rightResult.ty || !leftResult.ty->IsSameType(rightResult.ty)) {
+      errormsg.Error(pos, "same type required");
+      return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    }
+
+    /* ----------------------------------------------------------------------- */
+
+    if (leftResult.ty->IsSameType(TY::StringTy::Instance())) {
+      isString = true;
+    }
+    TR::Exp* resultExp = Conditional(oper, leftExp, rightExp, isString);
+    return TR::ExpAndTy(resultExp, TY::IntTy::Instance());
+  }
+  assert(0);
   return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy RecordExp::Translate(S::Table<E::EnvEntry> *venv,
                                   S::Table<TY::Ty> *tenv, TR::Level *level,
                                   TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
-}
+  // TODO: Here we assume that the order of a A::EFieldList and that of a TY::FieldList are the same
+  std::vector<TR::Exp*> recordFieldsVector;
+  TY::Ty *recordType = tenv->Look(typ);
+  if (!recordType) {
+    errormsg.Error(pos, "undefined type %s", typ->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+  if (recordType->ActualTy()->kind != TY::Ty::RECORD) {
+    errormsg.Error(pos, "%s is not a record", typ->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+
+  recordType = recordType->ActualTy();
+  TY::RecordTy* realRecordType = static_cast<TY::RecordTy *>(recordType);
+  A::EFieldList* eFieldList = fields;
+  TY::FieldList* fieldList = realRecordType->fields;
+  while (eFieldList) {
+    if (!fieldList) {
+      errormsg.Error(pos, "Too many fields in %s", typ->Name().c_str());
+      return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    }
+    A::EField* eFieldHead = eFieldList->head;
+    TY::Field* fieldHead = fieldList->head;
+    TR::ExpAndTy eFieldHeadResult = eFieldHead->exp->Translate(venv, tenv, level, label);
+    recordFieldsVector.push_back(eFieldHeadResult.exp);
+    if (!eFieldHeadResult.ty->IsSameType(fieldHead->ty)) {
+      errormsg.Error(pos, "mismatched field type %s", eFieldHead->name->Name().c_str());
+      return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    }
+    eFieldList = eFieldList->tail;
+    fieldList = fieldList->tail;
+  }
+  if (fieldList) {
+    errormsg.Error(pos, "Too few fields in %s", typ->Name().c_str());
+    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  }
+
+  /* ----------------------------------------------------------------------- */
+
+  // TODO: Finish RecordExp
+} 
 
 TR::ExpAndTy SeqExp::Translate(S::Table<E::EnvEntry> *venv,
                                S::Table<TY::Ty> *tenv, TR::Level *level,
@@ -560,5 +639,62 @@ namespace {
       tail = tail->tail;
     }
     return result;
+  }
+
+  TR::Exp* Calculate(A::Oper op, TR::Exp* left, TR::Exp* right) {
+    switch (op) {
+      case A::PLUS_OP:
+        return new TR::ExExp(new T::BinopExp(T::PLUS_OP, left->UnEx(), right->UnEx()));
+      case A::MINUS_OP:
+        return new TR::ExExp(new T::BinopExp(T::MINUS_OP, left->UnEx(), right->UnEx()));
+      case A::TIMES_OP:
+        return new TR::ExExp(new T::BinopExp(T::MUL_OP, left->UnEx(), right->UnEx()));
+      case A::DIVIDE_OP:
+        return new TR::ExExp(new T::BinopExp(T::DIV_OP, left->UnEx(), right->UnEx()));
+      default:
+        assert(0);
+    }
+    assert(0);
+    return nullptr;
+  }
+
+  TR::Exp* Conditional(A::Oper op, TR::Exp* left, TR::Exp* right, bool isString) {
+    // P155
+    T::CjumpStm* stm = nullptr;
+    T::Exp* l = nullptr;
+    T::Exp* r = nullptr;
+    if (isString) {
+      l = F::externalCall(stringEqual, new T::ExpList(left->UnEx(), new T::ExpList(right->UnEx(), nullptr)));
+      r = new T::ConstExp(1);
+    }
+    else {
+      l = left->UnEx();
+      r = right->UnEx();
+    }
+    switch (op) {
+      case A::EQ_OP:
+        stm = new T::CjumpStm(T::EQ_OP, l, r, nullptr, nullptr);
+        break;
+      case A::NEQ_OP:
+        stm = new T::CjumpStm(T::NE_OP, l, r, nullptr, nullptr);
+        break;
+      case A::LT_OP:
+        stm = new T::CjumpStm(T::LT_OP, l, r, nullptr, nullptr);
+        break;
+      case A::LE_OP:
+        stm = new T::CjumpStm(T::LE_OP, l, r, nullptr, nullptr);
+        break;
+      case A::GT_OP:
+        stm = new T::CjumpStm(T::GT_OP, l, r, nullptr, nullptr);
+        break;
+      case A::GE_OP:
+        stm = new T::CjumpStm(T::GE_OP, l, r, nullptr, nullptr);
+        break;
+      default:
+        assert(0);
+    }
+    TR::PatchList* trues = new TR::PatchList(&stm->true_label, nullptr);
+    TR::PatchList* falses = new TR::PatchList(&stm->false_label, nullptr);
+    return new TR::CxExp(trues, falses, stm);
   }
 }
