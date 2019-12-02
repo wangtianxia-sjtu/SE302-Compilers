@@ -37,6 +37,7 @@ namespace {
   TR::Exp* Seq(TR::Exp* before, TR::Exp* newExp);
   TR::Exp* Assign(TR::Exp* left, TR::Exp* right);
   TR::Exp* If(TR::Exp* test, TR::Exp* then, TR::Exp* elsee);
+  TR::Exp* While(TR::Exp* test, TR::Exp* body, TEMP::Label* done);
   TR::Exp* EmptyExp();
 }
 
@@ -619,8 +620,24 @@ TR::ExpAndTy IfExp::Translate(S::Table<E::EnvEntry> *venv,
 TR::ExpAndTy WhileExp::Translate(S::Table<E::EnvEntry> *venv,
                                  S::Table<TY::Ty> *tenv, TR::Level *level,
                                  TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  TEMP::Label* done = TEMP::NewLabel();
+  TR::ExpAndTy testResult = test->Translate(venv, tenv, level, label);
+  TR::Exp* testExp = testResult.exp;
+  TY::Ty* testType = testResult.ty;
+  TR::ExpAndTy bodyResult = body->Translate(venv, tenv, level, done); // Pass label "done" as a parameter
+  TR::Exp* bodyExp = bodyResult.exp;
+  TY::Ty* bodyType = bodyResult.ty;
+  if (!testType->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "while test should be integer");
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+  if (!bodyType->IsSameType(TY::VoidTy::Instance())) {
+    errormsg.Error(pos, "while body must produce no value");
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+
+  TR::Exp* resultExp = While(testExp, bodyExp, done);
+  return TR::ExpAndTy(resultExp, TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy ForExp::Translate(S::Table<E::EnvEntry> *venv,
@@ -836,6 +853,23 @@ namespace {
     }
     assert(0);
     return nullptr;
+  }
+
+  TR::Exp* While(TR::Exp* test, TR::Exp* body, TEMP::Label* done) {
+    // P169
+    TEMP::Label* testLabel = TEMP::NewLabel();
+    TEMP::Label* bodyLabel = TEMP::NewLabel();
+    TR::Cx testCx = test->UnCx();
+    TR::do_patch(testCx.trues, bodyLabel);
+    TR::do_patch(testCx.falses, done);
+    T::Stm* stm = 
+    new T::SeqStm(new T::LabelStm(testLabel),
+      new T::SeqStm(testCx.stm,
+        new T::SeqStm(new T::LabelStm(bodyLabel),
+          new T::SeqStm(body->UnNx(),
+            new T::SeqStm(new T::JumpStm(new T::NameExp(testLabel), new TEMP::LabelList(testLabel, nullptr)),
+              new T::LabelStm(done))))));
+    return new TR::NxExp(stm);
   }
   
   TR::Exp* Assign(TR::Exp* left, TR::Exp* right) {
