@@ -17,6 +17,7 @@ extern EM::ErrorMsg errormsg;
 namespace {
   F::FragList* globalFrags = nullptr;
   const std::string stringEqual = "stringEqual";
+  const std::string allocRecord = "allocRecord";
   void AddToGlobalFrags(F::Frag* newFrag) {
     F::FragList* tail = globalFrags;
     if (tail) {
@@ -32,6 +33,11 @@ namespace {
   T::ExpList* ToExpList(const std::vector<TR::Exp *> &formalsVector);
   TR::Exp* Calculate(A::Oper op, TR::Exp* left, TR::Exp* right);
   TR::Exp* Conditional(A::Oper op, TR::Exp* left, TR::Exp* right, bool isString);
+  TR::Exp* Record(const std::vector<TR::Exp *> &recordVector);
+  TR::Exp* Seq(TR::Exp* before, TR::Exp* newExp);
+  TR::Exp* Assign(TR::Exp* left, TR::Exp* right);
+  TR::Exp* If(TR::Exp* test, TR::Exp* then, TR::Exp* elsee);
+  TR::Exp* EmptyExp();
 }
 
 namespace TR {
@@ -248,11 +254,11 @@ TR::ExpAndTy SimpleVar::Translate(S::Table<E::EnvEntry> *venv,
   E::EnvEntry *envEntry = venv->Look(sym);
   if (!envEntry) {
     errormsg.Error(pos, "undefined variable %s", sym->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   if (envEntry->kind == E::EnvEntry::FUN) {
     errormsg.Error(pos, "function variable %s is not a simple value", sym->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
 
   /* ----------------------------------------------------------------------- */
@@ -275,7 +281,7 @@ TR::ExpAndTy FieldVar::Translate(S::Table<E::EnvEntry> *venv,
   TY::Ty* resultType = varResult.ty;
   if (!resultType || resultType->ActualTy()->kind != TY::Ty::Kind::RECORD) {
     errormsg.Error(pos, "not a record type");
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   resultType = resultType->ActualTy();
   TY::RecordTy* recordTy = static_cast<TY::RecordTy *>(resultType);
@@ -292,7 +298,7 @@ TR::ExpAndTy FieldVar::Translate(S::Table<E::EnvEntry> *venv,
   }
   if (!fieldType) {
     errormsg.Error(pos, "field %s doesn't exist", sym->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
 
   /* ----------------------------------------------------------------------- */
@@ -310,7 +316,7 @@ TR::ExpAndTy SubscriptVar::Translate(S::Table<E::EnvEntry> *venv,
   TR::Exp* varExp = varResult.exp;
   if (!varType || varType->ActualTy()->kind != TY::Ty::Kind::ARRAY) {
     errormsg.Error(pos, "array type required");
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   varType = varType->ActualTy();
   TY::ArrayTy* arrayTy = static_cast<TY::ArrayTy *>(varType);
@@ -320,7 +326,7 @@ TR::ExpAndTy SubscriptVar::Translate(S::Table<E::EnvEntry> *venv,
   TR::Exp* subscriptExp = subscriptResult.exp;
   if (!subscriptType || !subscriptType->IsSameType(TY::IntTy::Instance())) {
     errormsg.Error(pos, "integer required");
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
 
   /* ----------------------------------------------------------------------- */
@@ -371,11 +377,11 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
   E::EnvEntry* envEntry = venv->Look(func);
   if (!envEntry) {
     errormsg.Error(pos, "undefined function %s", func->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   if (envEntry->kind == E::EnvEntry::VAR) {
     errormsg.Error(pos, "%s is not a function", func->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   E::FunEntry* funEntry = static_cast<E::FunEntry *>(envEntry);
   TY::TyList* formals = funEntry->formals;
@@ -399,14 +405,14 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
     resultType = resultType->ActualTy();
   if (formals) {
     errormsg.Error(pos, "missing parameters in function %s", func->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   if (argList) {
     errormsg.Error(pos, "too many params in function %s", func->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   if (!valid) {
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
 
   /* ----------------------------------------------------------------------- */
@@ -444,7 +450,7 @@ TR::ExpAndTy OpExp::Translate(S::Table<E::EnvEntry> *venv,
     if (!leftResult.ty || !leftResult.ty->IsSameType(TY::IntTy::Instance())
        || !rightResult.ty || !rightResult.ty->IsSameType(TY::IntTy::Instance())) {
         errormsg.Error(pos, "integer required");
-        return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+        return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
     }
 
     /* ----------------------------------------------------------------------- */
@@ -460,7 +466,7 @@ TR::ExpAndTy OpExp::Translate(S::Table<E::EnvEntry> *venv,
     rightExp = rightResult.exp;
     if (!leftResult.ty || !rightResult.ty || !leftResult.ty->IsSameType(rightResult.ty)) {
       errormsg.Error(pos, "same type required");
-      return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+      return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
     }
 
     /* ----------------------------------------------------------------------- */
@@ -472,22 +478,23 @@ TR::ExpAndTy OpExp::Translate(S::Table<E::EnvEntry> *venv,
     return TR::ExpAndTy(resultExp, TY::IntTy::Instance());
   }
   assert(0);
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy RecordExp::Translate(S::Table<E::EnvEntry> *venv,
                                   S::Table<TY::Ty> *tenv, TR::Level *level,
                                   TEMP::Label *label) const {
   // TODO: Here we assume that the order of a A::EFieldList and that of a TY::FieldList are the same
+  // P167-168
   std::vector<TR::Exp*> recordFieldsVector;
   TY::Ty *recordType = tenv->Look(typ);
   if (!recordType) {
     errormsg.Error(pos, "undefined type %s", typ->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
   if (recordType->ActualTy()->kind != TY::Ty::RECORD) {
     errormsg.Error(pos, "%s is not a record", typ->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
 
   recordType = recordType->ActualTy();
@@ -497,7 +504,7 @@ TR::ExpAndTy RecordExp::Translate(S::Table<E::EnvEntry> *venv,
   while (eFieldList) {
     if (!fieldList) {
       errormsg.Error(pos, "Too many fields in %s", typ->Name().c_str());
-      return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+      return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
     }
     A::EField* eFieldHead = eFieldList->head;
     TY::Field* fieldHead = fieldList->head;
@@ -505,40 +512,108 @@ TR::ExpAndTy RecordExp::Translate(S::Table<E::EnvEntry> *venv,
     recordFieldsVector.push_back(eFieldHeadResult.exp);
     if (!eFieldHeadResult.ty->IsSameType(fieldHead->ty)) {
       errormsg.Error(pos, "mismatched field type %s", eFieldHead->name->Name().c_str());
-      return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+      return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
     }
     eFieldList = eFieldList->tail;
     fieldList = fieldList->tail;
   }
   if (fieldList) {
     errormsg.Error(pos, "Too few fields in %s", typ->Name().c_str());
-    return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
   }
 
   /* ----------------------------------------------------------------------- */
 
-  // TODO: Finish RecordExp
+  TR::Exp* exp = Record(recordFieldsVector);
+  return TR::ExpAndTy(exp, recordType);
 } 
 
 TR::ExpAndTy SeqExp::Translate(S::Table<E::EnvEntry> *venv,
                                S::Table<TY::Ty> *tenv, TR::Level *level,
                                TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  A::ExpList* head = seq;
+  TR::Exp* resultExp = nullptr;
+  TY::Ty* resultTy = nullptr;
+  if (!head) {
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+  while (head) {
+    A::Exp* expHead = head->head;
+    TR::ExpAndTy expHeadResult = expHead->Translate(venv, tenv, level, label);
+    resultTy = expHeadResult.ty;
+    resultExp = Seq(resultExp, expHeadResult.exp);
+    head = head->tail;
+  }
+  return TR::ExpAndTy(resultExp, resultTy);
 }
 
 TR::ExpAndTy AssignExp::Translate(S::Table<E::EnvEntry> *venv,
                                   S::Table<TY::Ty> *tenv, TR::Level *level,
                                   TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  bool valid = true;
+  TR::ExpAndTy expResult = exp->Translate(venv, tenv, level, label);
+  TR::ExpAndTy varResult = var->Translate(venv, tenv, level, label);
+  TR::Exp* expExp = expResult.exp;
+  TY::Ty* expType = expResult.ty;
+  TR::Exp* varExp = varResult.exp;
+  TY::Ty* varType = varResult.ty;
+  if (!expType || !varType || !expType->IsSameType(varType)) {
+    errormsg.Error(pos, "unmatched assign exp");
+    valid = false;
+  }
+  if (var->kind == A::Var::SIMPLE) {
+    A::SimpleVar* simpleVar = static_cast<A::SimpleVar *>(var);
+    E::VarEntry* varEntry = static_cast<E::VarEntry *>(venv->Look(simpleVar->sym));
+    if (varEntry->readonly) {
+      errormsg.Error(pos, "loop variable can't be assigned");
+      valid = false;
+    }
+  }
+  if (!valid) {
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+
+  TR::Exp* resultExp = Assign(varExp, expExp);
+  return TR::ExpAndTy(resultExp, TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy IfExp::Translate(S::Table<E::EnvEntry> *venv,
                               S::Table<TY::Ty> *tenv, TR::Level *level,
                               TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  TR::ExpAndTy testResult = test->Translate(venv, tenv, level, label);
+  TR::Exp* testExp = testResult.exp;
+  TY::Ty* testType = testResult.ty;
+  if (!testType || !testType->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "if integer required");
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+
+  TR::ExpAndTy thenResult = then->Translate(venv, tenv, level, label);
+  TR::Exp* thenExp = thenResult.exp;
+  TY::Ty* thenType = thenResult.ty;
+  if (!elsee) {
+    // if ... then ...
+    if (!thenType || !thenType->IsSameType(TY::VoidTy::Instance())) {
+      errormsg.Error(pos, "if-then exp's body must produce no value");
+      return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+    }
+    TR::Exp* resultExp = If(testExp, thenExp, nullptr);
+    return TR::ExpAndTy(resultExp, TY::VoidTy::Instance());
+  }
+  else {
+    // if ... then ... else ...
+    TR::ExpAndTy elseResult = elsee->Translate(venv, tenv, level, label);
+    TR::Exp* elseExp = elseResult.exp;
+    TY::Ty* elseType = elseResult.ty;
+    if (!elseType || !thenType->IsSameType(elseType)) {
+      errormsg.Error(pos, "then exp and else exp type mismatch");
+      return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+    }
+    TR::Exp* resultExp = If(testExp, thenExp, elseExp);
+    return TR::ExpAndTy(resultExp, thenType->ActualTy());
+  }
+  assert(0);
+  return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy WhileExp::Translate(S::Table<E::EnvEntry> *venv,
@@ -625,17 +700,17 @@ namespace {
     T::ExpList* tail = nullptr;
     std::size_t s = formalsVector.size();
     if (s == 0)
-      return nullptr;
+      return new T::ExpList(new T::ConstExp(0), nullptr);
     if (formalsVector[0])
       result = new T::ExpList(formalsVector[0]->UnEx(), nullptr);
     else
-      result = new T::ExpList(nullptr, nullptr);
+      result = new T::ExpList(new T::ConstExp(0), nullptr);
     tail = result;
     for (std::size_t i = 1; i < s; ++i) {
       if (formalsVector[i])
         tail->tail = new T::ExpList(formalsVector[i]->UnEx(), nullptr);
       else
-        tail->tail = new T::ExpList(nullptr, nullptr);
+        tail->tail = new T::ExpList(new T::ConstExp(0), nullptr);
       tail = tail->tail;
     }
     return result;
@@ -696,5 +771,74 @@ namespace {
     TR::PatchList* trues = new TR::PatchList(&stm->true_label, nullptr);
     TR::PatchList* falses = new TR::PatchList(&stm->false_label, nullptr);
     return new TR::CxExp(trues, falses, stm);
+  }
+
+  TR::Exp* Record(const std::vector<TR::Exp *> &recordVector) {
+    // TODO: Eliminate NewTemp here
+    // P168
+    std::size_t s = recordVector.size();
+    if (s == 0)
+      return EmptyExp();
+    TEMP::Temp* r = TEMP::Temp::NewTemp();
+    T::Exp* initRecord = F::externalCall(allocRecord, new T::ExpList(new T::ConstExp(s * F::wordSize), nullptr));
+    T::Stm* stm = new T::MoveStm(new T::TempExp(r), initRecord);
+    for (std::size_t i = 0; i < s; ++i) {
+      T::Exp* exp = recordVector[i]->UnEx();
+      stm = new T::SeqStm(stm, 
+        new T::MoveStm(new T::MemExp(new T::BinopExp(T::PLUS_OP, new T::TempExp(r), new T::ConstExp(i * F::wordSize))),
+          exp));
+    }
+    return new TR::ExExp(new T::EseqExp(stm, new T::TempExp(r)));
+  }
+
+  TR::Exp* EmptyExp() {
+    return new TR::ExExp(new T::ConstExp(0));
+  }
+
+  TR::Exp* Seq(TR::Exp* before, TR::Exp* newExp) {
+    if (!before) {
+      return new TR::ExExp(new T::EseqExp(new T::ExpStm(new T::ConstExp(0)), newExp->UnEx()));
+    }
+    return new TR::ExExp(new T::EseqExp(before->UnNx(), newExp->UnEx()));
+  }
+
+  TR::Exp* If(TR::Exp* test, TR::Exp* then, TR::Exp* elsee) {
+    // TODO: Eliminate NewTemp here
+    TR::Cx testCx = test->UnCx();
+    TEMP::Label* t = TEMP::NewLabel();
+    TEMP::Label* f = TEMP::NewLabel();
+    TR::do_patch(testCx.trues, t);
+    TR::do_patch(testCx.falses, f);
+    if (elsee) {
+      // TODO: Nx will be treated as a T::EseqExp(..., T::ConstExp(0)), see UnEx()
+      TEMP::Label* join = TEMP::NewLabel();
+      TEMP::Temp* r = TEMP::Temp::NewTemp();
+      T::Exp* e = 
+      new T::EseqExp(testCx.stm, 
+        new T::EseqExp(new T::LabelStm(t), 
+          new T::EseqExp(new T::MoveStm(new T::TempExp(r), then->UnEx()),
+            new T::EseqExp(new T::JumpStm(new T::NameExp(join), new TEMP::LabelList(join, nullptr)),
+              new T::EseqExp(new T::LabelStm(f), 
+                new T::EseqExp(new T::MoveStm(new T::TempExp(r), elsee->UnEx()),
+                  new T::EseqExp(new T::JumpStm(new T::NameExp(join), new TEMP::LabelList(join, nullptr)),
+                    new T::EseqExp(new T::LabelStm(join),
+                      new T::TempExp(r)))))))));
+      return new TR::ExExp(e);
+    }
+    else {
+      // translated as a statement
+      T::Stm* s =
+      new T::SeqStm(testCx.stm,
+        new T::SeqStm(new T::LabelStm(t),
+          new T::SeqStm(then->UnNx(),
+            new T::LabelStm(f))));
+      return new TR::NxExp(s);
+    }
+    assert(0);
+    return nullptr;
+  }
+  
+  TR::Exp* Assign(TR::Exp* left, TR::Exp* right) {
+    return new TR::NxExp(new T::MoveStm(left->UnEx(), right->UnEx()));
   }
 }

@@ -280,7 +280,7 @@ class X64Frame : public Frame {
 
     void AddToPrologue(T::Stm* stm) {
       if (!prologue) {
-        prologue = new T::SeqStm(stm, nullptr);
+        prologue = stm;
       }
       else {
         prologue = new T::SeqStm(prologue, stm);
