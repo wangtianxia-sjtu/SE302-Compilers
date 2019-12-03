@@ -38,6 +38,8 @@ namespace {
   TR::Exp* Assign(TR::Exp* left, TR::Exp* right);
   TR::Exp* If(TR::Exp* test, TR::Exp* then, TR::Exp* elsee);
   TR::Exp* While(TR::Exp* test, TR::Exp* body, TEMP::Label* done);
+  TR::Exp* For(TR::Access* loopVarAccess, TR::Exp* lo, TR::Exp* hi, TR::Exp* body, TR::Level* level, TEMP::Label* done);
+  TR::Exp* Let(const std::vector<TR::Exp *> &decsVector, TR::Exp* body);
   TR::Exp* EmptyExp();
 }
 
@@ -419,7 +421,7 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
   /* ----------------------------------------------------------------------- */
 
   T::Exp* staticLink = new T::TempExp(F::FP());
-  while (level != funEntry->level) {
+  while (level != funEntry->level->parent) {
     staticLink = new T::MemExp(new T::BinopExp(T::PLUS_OP, staticLink, new T::ConstExp(-F::wordSize)));
     level = level->parent;
   }
@@ -643,22 +645,57 @@ TR::ExpAndTy WhileExp::Translate(S::Table<E::EnvEntry> *venv,
 TR::ExpAndTy ForExp::Translate(S::Table<E::EnvEntry> *venv,
                                S::Table<TY::Ty> *tenv, TR::Level *level,
                                TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  bool valid = true;
+  TR::ExpAndTy loResult = lo->Translate(venv, tenv, level, label);
+  TR::ExpAndTy hiResult = hi->Translate(venv, tenv, level, label);
+  TEMP::Label* done = TEMP::NewLabel();
+  if (!loResult.ty || !loResult.ty->IsSameType(TY::IntTy::Instance()) || !hiResult.ty || !hiResult.ty->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "for exp's range type is not integer");
+    valid = false;
+  }
+  TR::Access* loopVarAccess = TR::Access::AllocLocal(level, escape);
+  venv->BeginScope();
+  venv->Enter(var, new E::VarEntry(loopVarAccess, TY::IntTy::Instance(), true));
+  TR::ExpAndTy bodyResult = body->Translate(venv, tenv, level, done); // Pass label "done" as a parameter
+  TR::Exp* result = For(loopVarAccess, loResult.exp, hiResult.exp, bodyResult.exp, level, done);
+  if (!bodyResult.ty || !bodyResult.ty->IsSameType(TY::VoidTy::Instance())) {
+    errormsg.Error(pos, "for body is not no value");
+    valid = false;
+  }
+  venv->EndScope();
+  if (!valid) {
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+  return TR::ExpAndTy(result, TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy BreakExp::Translate(S::Table<E::EnvEntry> *venv,
                                  S::Table<TY::Ty> *tenv, TR::Level *level,
                                  TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  // Simply jump to done (label)
+  // TODO: Detect out-of-loop breaks
+  T::Stm* stm = new T::JumpStm(new T::NameExp(label), new TEMP::LabelList(label, nullptr));
+  return TR::ExpAndTy(new TR::NxExp(stm), TY::VoidTy::Instance());
 }
 
 TR::ExpAndTy LetExp::Translate(S::Table<E::EnvEntry> *venv,
                                S::Table<TY::Ty> *tenv, TR::Level *level,
                                TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  A::DecList* decHead = decs;
+  std::vector<TR::Exp *> decResults;
+  venv->BeginScope();
+  tenv->BeginScope();
+  while (decHead) {
+    A::Dec* dec = decHead->head;
+    TR::Exp* decResult = dec->Translate(venv, tenv, level, label);
+    decResults.push_back(decResult);
+    decHead = decHead->tail;
+  }
+  TR::ExpAndTy result = body->Translate(venv, tenv, level, label);
+  TR::Exp* resultExp = Let(decResults, result.exp);
+  venv->EndScope();
+  tenv->EndScope();
+  return TR::ExpAndTy(resultExp, result.ty);
 }
 
 TR::ExpAndTy ArrayExp::Translate(S::Table<E::EnvEntry> *venv,
@@ -717,7 +754,7 @@ namespace {
     T::ExpList* tail = nullptr;
     std::size_t s = formalsVector.size();
     if (s == 0)
-      return new T::ExpList(new T::ConstExp(0), nullptr);
+      return nullptr;
     if (formalsVector[0])
       result = new T::ExpList(formalsVector[0]->UnEx(), nullptr);
     else
@@ -871,8 +908,52 @@ namespace {
               new T::LabelStm(done))))));
     return new TR::NxExp(stm);
   }
+
+  TR::Exp* For(TR::Access* loopVarAccess, TR::Exp* lo, TR::Exp* hi, TR::Exp* body, TR::Level* level, TEMP::Label* done) {
+    
+    /*
+     * move lo to loopVar
+     * move hi to hiTemp
+     * if loopVar <= hi goto bodyLabel else goto done
+     * bodyLabel:
+     * body->UnNx()
+     * if loopVar < hi goto addLabel else goto done
+     * addLabel:
+     * move loopVar+1 to loopVar
+     * goto bodyLabel
+     * done:
+     */
+
+    TEMP::Label* bodyLabel = TEMP::NewLabel();
+    TEMP::Label* addLabel = TEMP::NewLabel();
+    TEMP::Temp* hiTemp = TEMP::Temp::NewTemp();
+    T::Exp* loopVarExp = loopVarAccess->access->ToExp(new T::TempExp(F::FP()));
+    T::Stm* stm = 
+    new T::SeqStm(new T::MoveStm(loopVarExp, lo->UnEx()),
+      new T::SeqStm(new T::MoveStm(new T::TempExp(hiTemp), hi->UnEx()),
+        new T::SeqStm(new T::CjumpStm(T::LE_OP, loopVarExp, new T::TempExp(hiTemp), bodyLabel, done),
+          new T::SeqStm(new T::LabelStm(bodyLabel),
+            new T::SeqStm(body->UnNx(),
+              new T::SeqStm(new T::CjumpStm(T::LT_OP, loopVarExp, new T::TempExp(hiTemp), addLabel, done),
+                new T::SeqStm(new T::LabelStm(addLabel),
+                  new T::SeqStm(new T::MoveStm(loopVarExp, new T::BinopExp(T::PLUS_OP, loopVarExp, new T::ConstExp(1))),
+                    new T::SeqStm(new T::JumpStm(new T::NameExp(bodyLabel), new TEMP::LabelList(bodyLabel, nullptr)),
+                      new T::LabelStm(done))))))))));
+    return new TR::NxExp(stm);
+  }
   
   TR::Exp* Assign(TR::Exp* left, TR::Exp* right) {
     return new TR::NxExp(new T::MoveStm(left->UnEx(), right->UnEx()));
+  }
+
+  TR::Exp* Let(const std::vector<TR::Exp *> &decsVector, TR::Exp* body) {
+    std::size_t s = decsVector.size();
+    if (s == 0)
+      return body;
+    T::Stm* stm = decsVector[0]->UnNx();
+    for (std::size_t i = 1; i < s; ++i) {
+      stm = new T::SeqStm(stm, decsVector[i]->UnNx());
+    }
+    return new TR::ExExp(new T::EseqExp(stm, body->UnEx()));
   }
 }

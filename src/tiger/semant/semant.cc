@@ -318,8 +318,8 @@ TY::Ty *LetExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
     this_dec_head = this_dec_head->tail;
   }
   TY::Ty *result = body->SemAnalyze(venv, tenv, labelcount);
-  venv->BeginScope();
-  tenv->BeginScope();
+  venv->EndScope();
+  tenv->EndScope();
   return result;
 }
 
