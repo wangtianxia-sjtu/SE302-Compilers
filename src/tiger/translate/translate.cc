@@ -14,10 +14,19 @@
 
 extern EM::ErrorMsg errormsg;
 
+using VEnvType = S::Table<E::EnvEntry> *;
+using TEnvType = S::Table<TY::Ty> *;
+
+namespace TR {
+  class AccessList;
+}
+
 namespace {
   F::FragList* globalFrags = nullptr;
   const std::string stringEqual = "stringEqual";
   const std::string allocRecord = "allocRecord";
+  const std::string initArray = "initArray";
+
   void AddToGlobalFrags(F::Frag* newFrag) {
     F::FragList* tail = globalFrags;
     if (tail) {
@@ -30,6 +39,7 @@ namespace {
       globalFrags = new F::FragList(newFrag, nullptr);
     }
   }
+
   T::ExpList* ToExpList(const std::vector<TR::Exp *> &formalsVector);
   TR::Exp* Calculate(A::Oper op, TR::Exp* left, TR::Exp* right);
   TR::Exp* Conditional(A::Oper op, TR::Exp* left, TR::Exp* right, bool isString);
@@ -40,7 +50,48 @@ namespace {
   TR::Exp* While(TR::Exp* test, TR::Exp* body, TEMP::Label* done);
   TR::Exp* For(TR::Access* loopVarAccess, TR::Exp* lo, TR::Exp* hi, TR::Exp* body, TR::Level* level, TEMP::Label* done);
   TR::Exp* Let(const std::vector<TR::Exp *> &decsVector, TR::Exp* body);
+  TR::Exp* Array(TR::Exp* init, TR::Exp* size);
   TR::Exp* EmptyExp();
+
+  void procEntryExit(TR::Level* level, TR::Exp* body, TR::AccessList* formals);
+
+  static TY::TyList *make_formal_tylist(TEnvType tenv, A::FieldList *params) {
+  if (params == nullptr) {
+    return nullptr;
+  }
+
+  TY::Ty *ty = tenv->Look(params->head->typ);
+  if (ty == nullptr) {
+    errormsg.Error(params->head->pos, "undefined type %s",
+                   params->head->typ->Name().c_str());
+  }
+
+  if (ty)
+    return new TY::TyList(ty->ActualTy(), make_formal_tylist(tenv, params->tail));
+  else
+    return new TY::TyList(TY::VoidTy::Instance(), make_formal_tylist(tenv, params->tail));
+}
+
+static TY::FieldList *make_fieldlist(TEnvType tenv, A::FieldList *fields) {
+  if (fields == nullptr) {
+    return nullptr;
+  }
+
+  TY::Ty *ty = tenv->Look(fields->head->typ);
+  if (ty == nullptr) {
+    errormsg.Error(fields->head->pos, "undefined type %s",
+                   fields->head->typ->Name().c_str());
+  }
+  return new TY::FieldList(new TY::Field(fields->head->name, ty),
+                           make_fieldlist(tenv, fields->tail));
+}
+
+static U::BoolList* make_boollist(A::FieldList* param) {
+  if (param == nullptr) {
+    return nullptr;
+  }
+  return new U::BoolList(param->head->escape, make_boollist(param->tail));
+}
 }
 
 namespace TR {
@@ -60,7 +111,7 @@ class Level {
 
   Level(F::Frame *frame, Level *parent) : frame(frame), parent(parent) {}
 
-  AccessList *Formals(Level *level);
+  static AccessList *Formals(Level *level);
 
   static Level *NewLevel(Level *parent, TEMP::Label *name, U::BoolList *formals) {
     U::BoolList* formalsWithStaticLink = new U::BoolList(true, formals);
@@ -230,7 +281,7 @@ F::FragList *TranslateProgram(A::Exp *root) {
  AccessList* Level::Formals(Level *level) {
     F::AccessList* f_accessList = level->frame->GetFormalList();
     AccessList* result = nullptr;
-    // f_accessList = f_accessList->tail; // TODO: skip static link? TBD
+    f_accessList = f_accessList->tail; // Skip static link here, translate.cc knows nothing about static link
     if (f_accessList) {
       AccessList* tail = nullptr;
       Access* tr_access = new Access(level, f_accessList->head);
@@ -701,22 +752,102 @@ TR::ExpAndTy LetExp::Translate(S::Table<E::EnvEntry> *venv,
 TR::ExpAndTy ArrayExp::Translate(S::Table<E::EnvEntry> *venv,
                                  S::Table<TY::Ty> *tenv, TR::Level *level,
                                  TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  TY::Ty* arrayType = tenv->Look(typ);
+  if (!arrayType) {
+    errormsg.Error(pos, "undefined type %s", typ->Name().c_str());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+  if (!arrayType->ActualTy()->kind == TY::Ty::ARRAY) {
+    errormsg.Error(pos, "%s not an array type", typ->Name().c_str());
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+  TY::ArrayTy* actualTy = static_cast<TY::ArrayTy*>(arrayType->ActualTy());
+  TR::ExpAndTy sizeResult = size->Translate(venv, tenv, level, label);
+  if (!sizeResult.ty || !sizeResult.ty->IsSameType(TY::IntTy::Instance())) {
+    errormsg.Error(pos, "size must be an integer");
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+  TR::ExpAndTy initResult = init->Translate(venv, tenv, level, label);
+  if (!initResult.ty || !initResult.ty->IsSameType(actualTy->ty)) {
+    errormsg.Error(pos, "type mismatch");
+    return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
+  }
+  TR::Exp* initExp = Array(initResult.exp, sizeResult.exp);
+  return TR::ExpAndTy(initExp, actualTy);
 }
 
 TR::ExpAndTy VoidExp::Translate(S::Table<E::EnvEntry> *venv,
                                 S::Table<TY::Ty> *tenv, TR::Level *level,
                                 TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
+  return TR::ExpAndTy(EmptyExp(), TY::VoidTy::Instance());
 }
 
 TR::Exp *FunctionDec::Translate(S::Table<E::EnvEntry> *venv,
                                 S::Table<TY::Ty> *tenv, TR::Level *level,
                                 TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return nullptr;
+  A::FunDecList* funHead = functions;
+  std::set<std::string> names;
+
+  // First walkthrough
+  while (funHead) {
+    A::FunDec* thisFun = funHead->head;
+    std::string name = thisFun->name->Name();
+    TY::Ty *resultTy = nullptr;
+    if (thisFun->result) {
+      resultTy = tenv->Look(thisFun->result);
+      if (!resultTy) {
+        errormsg.Error(pos, "undefined type %s", thisFun->result->Name().c_str());
+      }
+    }
+    if (!resultTy) {
+      resultTy = TY::VoidTy::Instance();
+    }
+    if (names.find(name) != names.end()) {
+      errormsg.Error(pos, "two functions have the same name");
+      return new TR::ExExp(new T::ConstExp(0)); // Abort here, do not continue
+    }
+    else {
+      names.insert(name);
+      TY::TyList* formals = make_formal_tylist(tenv, thisFun->params);
+      U::BoolList* args = make_boollist(thisFun->params);
+      TR::Level* newLevel = TR::Level::NewLevel(level, thisFun->name, args);
+      E::FunEntry* newFunEntry = new E::FunEntry(newLevel, thisFun->name, formals, resultTy);
+      venv->Enter(thisFun->name, newFunEntry);
+    }
+    funHead = funHead->tail;
+  }
+
+  // Second walkthrough
+  funHead = functions;
+  while (funHead) {
+    A::FunDec* thisFun = funHead->head;
+    A::FieldList* thisFieldList = thisFun->params;
+    E::FunEntry* thisFunEntry = static_cast<E::FunEntry *>(venv->Look(thisFun->name));
+    TR::AccessList* thisAccessList = TR::Level::Formals(thisFunEntry->level);
+    TR::AccessList* thisAccessListHead = thisAccessList;
+    TY::TyList* thisTyList = thisFunEntry->formals;
+    venv->BeginScope();
+    for (; thisFieldList; thisFieldList = thisFieldList->tail, thisAccessList = thisAccessList->tail, thisTyList = thisTyList->tail) {
+      assert(thisAccessList);
+      assert(thisTyList);
+      venv->Enter(thisFieldList->head->name, new E::VarEntry(thisAccessList->head, thisTyList->head));
+    }
+
+    // Translate function body
+    TR::ExpAndTy thisFunResult = thisFun->body->Translate(venv, tenv, thisFunEntry->level, label); // Pass thisFunEntry->level as parameter
+    if (!thisFunResult.ty || !thisFunResult.ty->IsSameType(thisFunEntry->result)) {
+      if (thisFunEntry->result->IsSameType(TY::VoidTy::Instance())) {
+        errormsg.Error(pos, "procedure returns value");
+      }
+      else {
+        errormsg.Error(pos, "return value mismatch");
+      }
+    }
+    procEntryExit(thisFunEntry->level, thisFunResult.exp, thisAccessListHead);
+    venv->EndScope();
+    funHead = funHead->tail;
+  }
+  return EmptyExp();
 }
 
 TR::Exp *VarDec::Translate(S::Table<E::EnvEntry> *venv, S::Table<TY::Ty> *tenv,
@@ -955,5 +1086,19 @@ namespace {
       stm = new T::SeqStm(stm, decsVector[i]->UnNx());
     }
     return new TR::ExExp(new T::EseqExp(stm, body->UnEx()));
+  }
+
+  TR::Exp* Array(TR::Exp* init, TR::Exp* size) {
+    T::Exp* initCall = F::externalCall(initArray, new T::ExpList(size->UnEx(), new T::ExpList(init->UnEx(), nullptr)));
+    return new TR::ExExp(initCall);
+  }
+
+  void procEntryExit(TR::Level* level, TR::Exp* body, TR::AccessList* formals) {
+    // P171-173
+    // TODO: Consider procedure call without return value
+    T::Stm* stm = new T::MoveStm(new T::TempExp(F::RV()), body->UnEx());
+    stm = F::F_procEntryExit1(level->frame, stm);
+    F::Frag* funFrag = new F::ProcFrag(stm, level->frame);
+    AddToGlobalFrags(funFrag);
   }
 }
