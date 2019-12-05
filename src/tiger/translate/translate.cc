@@ -52,6 +52,7 @@ namespace {
   TR::Exp* Let(const std::vector<TR::Exp *> &decsVector, TR::Exp* body);
   TR::Exp* Array(TR::Exp* init, TR::Exp* size);
   TR::Exp* EmptyExp();
+  TR::Exp* VarDecInit(TR::Access* access, TR::Exp* exp);
 
   void procEntryExit(TR::Level* level, TR::Exp* body, TR::AccessList* formals);
 
@@ -266,16 +267,17 @@ Level *Outermost() {
   static Level *lv = nullptr;
   if (lv != nullptr) return lv;
 
-  lv = new Level(nullptr, nullptr);
+  lv = new Level(F::NewX64Frame(TEMP::NamedLabel("tigermain"), new U::BoolList(true, nullptr)), nullptr);
   return lv;
 }
 
 F::FragList *TranslateProgram(A::Exp *root) {
-  // TODO: Needs Tr_procEntryExit and Tr_getResult here P173
+  // Needs Tr_procEntryExit and Tr_getResult here P173
   Level* mainFrame = Outermost();
   TEMP::Label* mainLabel = TEMP::NewLabel();
   ExpAndTy result = root->Translate(E::BaseVEnv(), E::BaseTEnv(), mainFrame, mainLabel);
-  return nullptr;
+  procEntryExit(mainFrame, result.exp, nullptr);
+  return globalFrags;
 }
 
  AccessList* Level::Formals(Level *level) {
@@ -852,29 +854,98 @@ TR::Exp *FunctionDec::Translate(S::Table<E::EnvEntry> *venv,
 
 TR::Exp *VarDec::Translate(S::Table<E::EnvEntry> *venv, S::Table<TY::Ty> *tenv,
                            TR::Level *level, TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return nullptr;
+  TR::ExpAndTy initResult = init->Translate(venv, tenv, level, label);
+  TR::Access* access = TR::Access::AllocLocal(level, true);
+  if (typ) {
+    TY::Ty* type = tenv->Look(typ);
+    if (!type) {
+      errormsg.Error(pos, "undefined type %s", typ->Name().c_str());
+      type = TY::VoidTy::Instance();
+    }
+    else {
+      if (!initResult.ty || !initResult.ty->IsSameType(type)) {
+        errormsg.Error(pos, "type mismatch");
+      }
+    }
+    venv->Enter(var, new E::VarEntry(access, type));
+  }
+  else {
+    if (initResult.ty->ActualTy()->kind == TY::Ty::Kind::NIL) {
+      errormsg.Error(pos, "init should not be nil without type specified");
+      venv->Enter(var, new E::VarEntry(access, TY::IntTy::Instance()));
+    }
+    else {
+      venv->Enter(var, new E::VarEntry(access, initResult.ty));
+    }
+  }
+  return VarDecInit(access, initResult.exp);
 }
 
 TR::Exp *TypeDec::Translate(S::Table<E::EnvEntry> *venv, S::Table<TY::Ty> *tenv,
                             TR::Level *level, TEMP::Label *label) const {
-  // TODO: Put your codes here (lab5).
-  return nullptr;
+  // Copied from lab4
+  A::NameAndTyList *this_type = types;
+  std::set<std::string> type_string_set;
+
+  while (this_type) {
+    A::NameAndTy *this_type_head = this_type->head;
+    if (type_string_set.find(this_type_head->name->Name()) != type_string_set.end()) {
+      errormsg.Error(pos, "two types have the same name");
+    }
+    else {
+      type_string_set.insert(this_type_head->name->Name());
+      tenv->Enter(this_type_head->name, new TY::NameTy(this_type_head->name, nullptr));
+    }
+    this_type = this_type->tail;
+  }
+
+  this_type = types;
+  while (this_type) {
+    A::NameAndTy *this_type_head = this_type->head;
+    TY::Ty *ty = tenv->Look(this_type_head->name);
+    TY::NameTy *nameTy = static_cast<TY::NameTy*>(ty);
+    nameTy->ty = this_type_head->ty->Translate(tenv);
+    this_type = this_type->tail;
+  }
+
+  this_type = types;
+  while (this_type) {
+    A::NameAndTy *this_type_head = this_type->head;
+    TY::Ty *ty = tenv->Look(this_type_head->name);
+    if (!ty->ActualTy()) {
+      errormsg.Error(pos, "illegal type cycle");
+      break;
+    }
+    this_type = this_type->tail;
+  }
+
+  return EmptyExp();
 }
 
 TY::Ty *NameTy::Translate(S::Table<TY::Ty> *tenv) const {
-  // TODO: Put your codes here (lab5).
-  return TY::VoidTy::Instance();
+  // Copied from lab4
+  TY::Ty *ty = tenv->Look(name);
+  if (!ty) {
+    errormsg.Error(pos, "undefined type %s", name->Name().c_str());
+    return TY::VoidTy::Instance();
+  }
+  return ty;
 }
 
 TY::Ty *RecordTy::Translate(S::Table<TY::Ty> *tenv) const {
-  // TODO: Put your codes here (lab5).
-  return TY::VoidTy::Instance();
+  // Copied from lab4
+  TY::FieldList *fieldList = make_fieldlist(tenv, record);
+  return new TY::RecordTy(fieldList);
 }
 
 TY::Ty *ArrayTy::Translate(S::Table<TY::Ty> *tenv) const {
-  // TODO: Put your codes here (lab5).
-  return TY::VoidTy::Instance();
+  // Copied from lab4
+  TY::Ty *arrayTy = tenv->Look(array);
+  if (!arrayTy) {
+    errormsg.Error(pos, "undefined type %s", array->Name().c_str());
+    arrayTy = TY::IntTy::Instance();
+  }
+  return new TY::ArrayTy(arrayTy);
 }
 
 }  // namespace A
@@ -1091,6 +1162,10 @@ namespace {
   TR::Exp* Array(TR::Exp* init, TR::Exp* size) {
     T::Exp* initCall = F::externalCall(initArray, new T::ExpList(size->UnEx(), new T::ExpList(init->UnEx(), nullptr)));
     return new TR::ExExp(initCall);
+  }
+
+  TR::Exp* VarDecInit(TR::Access* access, TR::Exp* exp) {
+    return new TR::NxExp(new T::MoveStm(access->access->ToExp(new T::TempExp(F::FP())), exp->UnEx()));
   }
 
   void procEntryExit(TR::Level* level, TR::Exp* body, TR::AccessList* formals) {
