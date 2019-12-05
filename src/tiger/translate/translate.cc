@@ -482,12 +482,12 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
   TR::Exp* resultExp = nullptr;
   if (funEntry->level->parent == nullptr) {
     // External call, no static link
-    resultExp = new TR::ExExp(F::externalCall(funEntry->label->Name(), expList));
+    resultExp = new TR::ExExp(F::externalCall(func->Name(), expList)); // External functions will have a null label, see env.cc
   }
   else {
     // Add static link
     expList = new T::ExpList(staticLink, expList);
-    resultExp = new TR::ExExp(new T::CallExp(new T::NameExp(funEntry->label), expList));
+    resultExp = new TR::ExExp(new T::CallExp(new T::NameExp(func), expList));
   }
   return TR::ExpAndTy(resultExp, resultType);
 }
@@ -813,7 +813,7 @@ TR::Exp *FunctionDec::Translate(S::Table<E::EnvEntry> *venv,
       TY::TyList* formals = make_formal_tylist(tenv, thisFun->params);
       U::BoolList* args = make_boollist(thisFun->params);
       TR::Level* newLevel = TR::Level::NewLevel(level, thisFun->name, args);
-      E::FunEntry* newFunEntry = new E::FunEntry(newLevel, thisFun->name, formals, resultTy);
+      E::FunEntry* newFunEntry = new E::FunEntry(newLevel, thisFun->name, formals, resultTy); // Pass thisFun->name as TEMP::Label*? TBD
       venv->Enter(thisFun->name, newFunEntry);
     }
     funHead = funHead->tail;
