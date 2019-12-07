@@ -1,6 +1,7 @@
 #include "tiger/frame/frame.h"
 
 #include <string>
+#include <vector>
 
 namespace {
   TEMP::Temp* rsp = nullptr;
@@ -482,16 +483,55 @@ Frame* NewX64Frame(TEMP::Label* name, U::BoolList* formals) {
 }
 
 T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm) {
-  // TODO
+  std::vector<TEMP::Temp *> calleeSaveTemps;
+  T::Stm* save = nullptr;
+  T::Stm* restore = nullptr;
+
+  // Save registers
+  TEMP::TempList* calleeSaveRegisters = calleesaves();
+  for (; calleeSaveRegisters; calleeSaveRegisters = calleeSaveRegisters->tail) {
+    TEMP::Temp* temp = TEMP::Temp::NewTemp();
+    T::Exp* tempExp = new T::TempExp(temp);
+    calleeSaveTemps.push_back(temp);
+    if (save) {
+      save = new T::SeqStm(save, new T::MoveStm(tempExp, new T::TempExp(calleeSaveRegisters->head)));
+    }
+    else {
+      save = new T::MoveStm(tempExp, new T::TempExp(calleeSaveRegisters->head));
+    }
+  }
+
+  // Restore registers
+  calleeSaveRegisters = calleesaves();
+  int count = 0;
+  for (; calleeSaveRegisters; calleeSaveRegisters = calleeSaveRegisters->tail) {
+    T::Exp* tempExp = new T::TempExp(calleeSaveTemps[count]);
+    if (restore) {
+      restore = new T::SeqStm(restore, new T::MoveStm(new T::TempExp(calleeSaveRegisters->head), tempExp));
+    }
+    else {
+      restore = new T::MoveStm(new T::TempExp(calleeSaveRegisters->head), tempExp);
+    }
+    count++;
+  }
+
   T::Stm* prologue = frame->GetPrologue();
-  if (!prologue)
-    return stm;
-  return new T::SeqStm(prologue, stm);
+  if (!prologue) {
+    prologue = new T::ExpStm(new T::ConstExp(0));
+  }
+  return new T::SeqStm(save, new T::SeqStm(prologue, new T::SeqStm(stm, restore)));
 }
 
 AS::InstrList* F_procEntryExit2(AS::InstrList* body) {
-  // TODO
-  return nullptr;
+  // P215
+  static TEMP::TempList* returnSink = nullptr;
+  if (!returnSink)
+    returnSink = 
+    new TEMP::TempList(SP(), 
+      new TEMP::TempList(RV(), 
+        calleesaves()));
+  return AS::InstrList::Splice(body, 
+          new AS::InstrList(new AS::OperInstr("", nullptr, returnSink, nullptr), nullptr));
 }
 
 AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body) {

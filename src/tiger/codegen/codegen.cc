@@ -1,8 +1,11 @@
 #include "tiger/codegen/codegen.h"
 
+#include <iostream>
+
 namespace {
   AS::InstrList* iList = nullptr;
   AS::InstrList* last = nullptr;
+  std::string fs;
 
   void emit(AS::Instr* inst) {
     if (last) {
@@ -14,13 +17,160 @@ namespace {
       last = iList;
     }
   }
+
+  void munchStm(T::Stm* s);
+  std::string toOpString(T::RelOp op);
+  TEMP::Temp* munchExp(T::Exp* e);
+  TEMP::TempList* L(TEMP::Temp* h, TEMP::TempList* t);
 }
 
 namespace CG {
 
 AS::InstrList* Codegen(F::Frame* f, T::StmList* stmList) {
-  // TODO: Put your codes here (lab6).
-  return nullptr;
+  AS::InstrList* list;
+  T::StmList* sl;
+
+  fs = f->GetName()->Name() + "_framesize"; // An assembly-language constant, see P213
+  for (sl = stmList; sl; sl = sl->tail) {
+    munchStm(sl->head);
+  }
+
+  list = iList;
+  iList = last = nullptr;
+  fs = "";
+  return F::F_procEntryExit2(list);
 }
 
 }  // namespace CG
+
+namespace {
+  void munchStm(T::Stm* s) {
+    switch(s->kind) {
+      case T::Stm::Kind::MOVE: {
+        T::MoveStm* moveStm = static_cast<T::MoveStm *>(s);
+        T::Exp* dst = moveStm->dst;
+        T::Exp* src = moveStm->src;
+        TEMP::Temp* srcTemp = munchExp(src);
+
+        if (dst->kind == T::Exp::TEMP) {
+          T::TempExp* dstTempExp = static_cast<T::TempExp *>(dst);
+          emit(new AS::MoveInstr("movq `s0,`d0", 
+                new TEMP::TempList(dstTempExp->temp, nullptr), 
+                  new TEMP::TempList(srcTemp, nullptr)));
+          return;
+        }
+
+        if (dst->kind == T::Exp::MEM) {
+          T::MemExp* dstMemExp = static_cast<T::MemExp *>(dst);
+          TEMP::Temp* dstTemp = munchExp(dstMemExp->exp);
+          emit(new AS::MoveInstr("movq `s0, (`s1)", 
+                nullptr,
+                  new TEMP::TempList(srcTemp, new TEMP::TempList(dstTemp, nullptr))));
+          return;
+        }
+
+        std::cerr << "Wrong dst->kind: " << dst->kind << std::endl;
+        assert(0);
+      }
+      case T::Stm::Kind::LABEL: {
+        T::LabelStm* labelStm = static_cast<T::LabelStm *>(s);
+        std::string labelString(labelStm->label->Name());
+        emit(new AS::LabelInstr(labelString, labelStm->label));
+        return;
+      }
+      case T::Stm::Kind::JUMP: {
+        T::JumpStm* jumpStm = static_cast<T::JumpStm *>(s);
+        std::string labelString = "jmp" + jumpStm->exp->name->Name();
+        emit(new AS::OperInstr(labelString, nullptr, nullptr, new AS::Targets(jumpStm->jumps)));
+        return;
+      }
+      case T::Stm::Kind::CJUMP: {
+        T::CjumpStm* cjumpStm = static_cast<T::CjumpStm *>(s);
+        TEMP::Temp* leftTemp = munchExp(cjumpStm->left);
+        TEMP::Temp* rightTemp = munchExp(cjumpStm->right);
+        std::string assem;
+        std::string opString = toOpString(cjumpStm->op);
+        // Every cjump is immediately followed by its false label
+        emit(new AS::OperInstr("cmpq `s0,`s1", 
+              nullptr, 
+                new TEMP::TempList(rightTemp, new TEMP::TempList(leftTemp, nullptr)),
+                  nullptr));
+        assem = opString + " " + cjumpStm->true_label->Name();
+        emit(new AS::OperInstr(assem,
+              nullptr,
+                nullptr,
+                  new AS::Targets(new TEMP::LabelList(cjumpStm->true_label, nullptr))));
+        return;
+      }
+      case T::Stm::Kind::EXP: {
+        T::ExpStm* expStm = static_cast<T::ExpStm *>(s);
+        munchExp(expStm->exp);
+        return;
+      }
+      default: {
+        std::cerr << "T::Stm::Kind unrecognized: " << s->kind << std::endl;
+        assert(0);
+      }
+    }
+  }
+
+  TEMP::Temp* munchExp(T::Exp* e) {
+    switch (e->kind) {
+      case T::Exp::Kind::BINOP: {
+        return nullptr;
+      }
+      case T::Exp::Kind::MEM: {
+        return nullptr;
+      }
+      case T::Exp::Kind::TEMP: {
+        return nullptr;
+      }
+      case T::Exp::Kind::NAME: {
+        return nullptr;
+      }
+      case T::Exp::Kind::CONST: {
+        return nullptr;
+      }
+      case T::Exp::Kind::CALL: {
+        return nullptr;
+      }
+      default: {
+        std::cerr << "T::Exp::Kind not recognized: " << e->kind << std::endl;
+        assert(0);
+      }
+    }
+    return nullptr;
+  }
+
+  TEMP::TempList* L(TEMP::Temp* h, TEMP::TempList* t) {
+    return new TEMP::TempList(h, t);
+  }
+
+  std::string toOpString(T::RelOp op) {
+    std::string opString;
+    switch (op) {
+      case T::RelOp::EQ_OP:
+        opString = "je";
+        break;
+      case T::RelOp::NE_OP:
+        opString = "jne";
+        break;
+      case T::RelOp::GE_OP:
+        opString = "jge";
+        break;
+      case T::RelOp::GT_OP:
+        opString = "jg";
+        break;
+      case T::RelOp::LE_OP:
+        opString = "jle";
+        break;
+      case T::RelOp::LT_OP:
+        opString = "jl";
+        break;
+      default:
+        std::cerr << "T::RelOp not recognized: " << op << std::endl;
+        assert(0);
+    }
+    return opString;
+  }
+}
