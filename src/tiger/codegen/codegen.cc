@@ -80,7 +80,7 @@ namespace {
       }
       case T::Stm::Kind::JUMP: {
         T::JumpStm* jumpStm = static_cast<T::JumpStm *>(s);
-        std::string labelString = "jmp" + jumpStm->exp->name->Name();
+        std::string labelString = "jmp " + jumpStm->exp->name->Name();
         emit(new AS::OperInstr(labelString, nullptr, nullptr, new AS::Targets(jumpStm->jumps)));
         return;
       }
@@ -115,12 +115,39 @@ namespace {
   }
 
   TEMP::Temp* munchExp(T::Exp* e) {
+    // TODO: Finsh munchExp
+    TEMP::Temp* r = TEMP::Temp::NewTemp();
     switch (e->kind) {
       case T::Exp::Kind::BINOP: {
-        return nullptr;
+        T::BinopExp* binopExp = static_cast<T::BinopExp *>(e);
+        TEMP::Temp* left = munchExp(binopExp->left);
+        TEMP::Temp* right = munchExp(binopExp->right);
+        switch (binopExp->op) {
+          case T::BinOp::PLUS_OP: {
+            emit(new AS::MoveInstr("movq `s0,`d0", L(r, nullptr), L(left, nullptr)));
+            emit(new AS::OperInstr("addq `s0,`d0", L(r, nullptr), L(right, L(r, nullptr)), nullptr));
+            break;
+          }
+          case T::BinOp::MINUS_OP: {
+            emit(new AS::MoveInstr("movq `s0,`d0", L(r, nullptr), L(left, nullptr)));
+            emit(new AS::OperInstr("subq `s0,`d0", L(r, nullptr), L(right, L(r, nullptr)), nullptr));
+            break;
+          }
+          case T::BinOp::MUL_OP: {
+            break;
+          }
+          case T::BinOp::DIV_OP: {
+            break;
+          }
+          default:
+            std::cerr << "T::BinOp not recognized: " << binopExp->op << std::endl;
+            assert(0);
+        }
+        return r;
       }
       case T::Exp::Kind::MEM: {
-        return nullptr;
+        T::MemExp* memExp = static_cast<T::MemExp *>(e);
+        TEMP::Temp* addr = munchExp(memExp->exp);
       }
       case T::Exp::Kind::TEMP: {
         return nullptr;

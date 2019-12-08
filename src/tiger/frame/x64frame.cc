@@ -519,7 +519,7 @@ T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm) {
   if (!prologue) {
     prologue = new T::ExpStm(new T::ConstExp(0));
   }
-  return new T::SeqStm(save, new T::SeqStm(prologue, new T::SeqStm(stm, restore)));
+  return new T::SeqStm(prologue, new T::SeqStm(save, new T::SeqStm(stm, restore)));
 }
 
 AS::InstrList* F_procEntryExit2(AS::InstrList* body) {
