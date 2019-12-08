@@ -23,7 +23,7 @@ namespace {
 TEMP::Map* temp_map;
 
 void do_proc(FILE* out, F::ProcFrag* procFrag) {
-  temp_map = TEMP::Map::Empty();
+  temp_map = F::tempMap();
   // Init temp_map
 
   //  printf("doProc for function %s:\n", this->frame->label->Name().c_str());
@@ -50,10 +50,11 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
 
   // lab6: register allocation
   //  printf("----======before RA=======-----\n");
-  RA::Result allocation = RA::RegAlloc(procFrag->frame, iList); /* 11 */
+  // RA::Result allocation = RA::RegAlloc(procFrag->frame, iList); /* 11 */
   //  printf("----======after RA=======-----\n");
 
-  AS::Proc* proc = F::F_procEntryExit3(procFrag->frame, allocation.il);
+  // AS::Proc* proc = F::F_procEntryExit3(procFrag->frame, allocation.il);
+  AS::Proc* proc = F::F_procEntryExit3(procFrag->frame, iList);
 
   std::string procName = procFrag->frame->GetName()->Name();
   fprintf(out, ".globl %s\n", procName.c_str());
@@ -62,7 +63,7 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
   fprintf(out, "%s", proc->prolog.c_str());
   // body
   proc->body->Print(out,
-                    TEMP::Map::LayerMap(temp_map, allocation.coloring));
+                    TEMP::Map::LayerMap(temp_map, TEMP::Map::Name()));
   // epilog
   fprintf(out, "%s", proc->epilog.c_str());
   fprintf(out, ".size %s, .-%s\n", procName.c_str(), procName.c_str());

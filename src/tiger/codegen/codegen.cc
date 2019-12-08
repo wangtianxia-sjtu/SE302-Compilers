@@ -19,6 +19,7 @@ namespace {
   }
 
   void munchStm(T::Stm* s);
+  TEMP::TempList* munchArgs(T::ExpList* args);
   std::string toOpString(T::RelOp op);
   TEMP::Temp* munchExp(T::Exp* e);
   TEMP::TempList* L(TEMP::Temp* h, TEMP::TempList* t);
@@ -94,7 +95,7 @@ namespace {
         emit(new AS::OperInstr("cmpq `s0,`s1", 
               nullptr, 
                 new TEMP::TempList(rightTemp, new TEMP::TempList(leftTemp, nullptr)),
-                  nullptr));
+                  new AS::Targets(nullptr)));
         assem = opString + " " + cjumpStm->true_label->Name();
         emit(new AS::OperInstr(assem,
               nullptr,
@@ -125,18 +126,24 @@ namespace {
         switch (binopExp->op) {
           case T::BinOp::PLUS_OP: {
             emit(new AS::MoveInstr("movq `s0,`d0", L(r, nullptr), L(left, nullptr)));
-            emit(new AS::OperInstr("addq `s0,`d0", L(r, nullptr), L(right, L(r, nullptr)), nullptr));
+            emit(new AS::OperInstr("addq `s0,`d0", L(r, nullptr), L(right, L(r, nullptr)), new AS::Targets(nullptr)));
             break;
           }
           case T::BinOp::MINUS_OP: {
             emit(new AS::MoveInstr("movq `s0,`d0", L(r, nullptr), L(left, nullptr)));
-            emit(new AS::OperInstr("subq `s0,`d0", L(r, nullptr), L(right, L(r, nullptr)), nullptr));
+            emit(new AS::OperInstr("subq `s0,`d0", L(r, nullptr), L(right, L(r, nullptr)), new AS::Targets(nullptr)));
             break;
           }
           case T::BinOp::MUL_OP: {
+            emit(new AS::MoveInstr("movq `s0,`d0", L(r, nullptr), L(left, nullptr)));
+            emit(new AS::OperInstr("imulq `s0,`d0", L(r, nullptr), L(right, L(r, nullptr)), new AS::Targets(nullptr)));
             break;
           }
           case T::BinOp::DIV_OP: {
+            emit(new AS::MoveInstr("movq `s0,`d0", L(F::NUMERATOR(), nullptr), L(left, nullptr)));
+            emit(new AS::OperInstr("cqto", L(F::NUMERATOR(), L(F::NUMERATOR_HIGHER_64(), nullptr)), L(F::NUMERATOR(), nullptr), new AS::Targets(nullptr)));
+            emit(new AS::OperInstr("idivq `s0", L(F::QUOTIENT(), nullptr), L(right, L(F::NUMERATOR(), L(F::NUMERATOR_HIGHER_64(), nullptr))), new AS::Targets(nullptr)));
+            emit(new AS::MoveInstr("movq `s0,`d0", L(r, nullptr), L(F::QUOTIENT(), nullptr)));
             break;
           }
           default:
@@ -148,18 +155,42 @@ namespace {
       case T::Exp::Kind::MEM: {
         T::MemExp* memExp = static_cast<T::MemExp *>(e);
         TEMP::Temp* addr = munchExp(memExp->exp);
+        emit(new AS::MoveInstr("movq (`s0),`d0", L(r, nullptr), L(addr, nullptr)));
+        return r;
       }
       case T::Exp::Kind::TEMP: {
-        return nullptr;
+        T::TempExp* tempExp = static_cast<T::TempExp *>(e);
+        if (tempExp->temp == F::FP()) {
+          std::string instr = "leaq " + fs + "(`s0),`d0";
+          emit(new AS::OperInstr(instr, L(r, nullptr), L(F::SP(), nullptr), new AS::Targets(nullptr)));
+          return r;
+        }
+        else
+          return tempExp->temp;
+        assert(0);
+        break;
       }
       case T::Exp::Kind::NAME: {
-        return nullptr;
+        T::NameExp* nameExp = static_cast<T::NameExp *>(e);
+        std::string instr = "movq $" + nameExp->name->Name() + ",`d0";
+        emit(new AS::OperInstr(instr, L(r, nullptr), nullptr, new AS::Targets(nullptr)));
+        return r;
       }
       case T::Exp::Kind::CONST: {
-        return nullptr;
+        T::ConstExp* constExp = static_cast<T::ConstExp *>(e);
+        std::string constString = std::to_string(constExp->consti);
+        std::string instr = "movq $" + constString + ",`d0";
+        emit(new AS::MoveInstr(instr, L(r, nullptr), nullptr));
+        return r;
       }
       case T::Exp::Kind::CALL: {
-        return nullptr;
+        T::CallExp* callExp = static_cast<T::CallExp *>(e);
+        T::NameExp* funcExp = static_cast<T::NameExp *>(callExp->fun);
+        TEMP::TempList* argsTemps = munchArgs(callExp->args);
+        std::string instr = "call " + funcExp->name->Name();
+        emit(new AS::OperInstr(instr, F::callersaves(), argsTemps, new AS::Targets(nullptr)));
+        emit(new AS::MoveInstr("movq `s0, `d0", L(r, nullptr), L(F::RV(), nullptr)));
+        return r;
       }
       default: {
         std::cerr << "T::Exp::Kind not recognized: " << e->kind << std::endl;
@@ -199,5 +230,24 @@ namespace {
         assert(0);
     }
     return opString;
+  }
+
+  TEMP::TempList* munchArgs(T::ExpList* args) {
+    int count = 0;
+    TEMP::TempList* argsregs = F::argregs();
+    TEMP::TempList* result = nullptr;
+    for (T::ExpList* head = args; head; head = head->tail) {
+      TEMP::Temp* arg = munchExp(head->head);
+      if (count <= 5) {
+        emit(new AS::MoveInstr("movq `s0,`d0", L(argsregs->head, nullptr), L(arg, nullptr)));
+        result = new TEMP::TempList(argsregs->head, result);
+        argsregs = argsregs->tail;
+      }
+      else {
+        emit(new AS::OperInstr("pushq `s0", nullptr, L(arg, nullptr), new AS::Targets(nullptr))); // No need to consider F::SP() here
+      }
+      count++;
+    }
+    return result;
   }
 }

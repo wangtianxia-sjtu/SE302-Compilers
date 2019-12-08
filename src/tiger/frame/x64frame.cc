@@ -260,6 +260,18 @@ TEMP::Temp* RV() {
   return RAX();
 }
 
+TEMP::Temp* NUMERATOR() {
+  return RAX();
+}
+
+TEMP::Temp* NUMERATOR_HIGHER_64() {
+  return RDX();
+}
+
+TEMP::Temp* QUOTIENT() {
+  return RAX();
+}
+
 class X64Frame : public Frame {
   // TODO: Put your codes here (lab6).
   private:
@@ -463,6 +475,10 @@ class X64Frame : public Frame {
       return prologue;
     }
 
+    int GetSize() const override {
+      return frameSize;
+    }
+
     Access* AllocLocal(bool escape) override {
       if (escape) {
         frameSize += wordSize;
@@ -535,8 +551,12 @@ AS::InstrList* F_procEntryExit2(AS::InstrList* body) {
 }
 
 AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body) {
-  // TODO
-  return nullptr;
+  std::string fs = frame->GetName()->Name() + "_framesize";
+  std::string prolog = ".set " + fs + "," + std::to_string(frame->GetSize()) + "\n";
+  prolog = prolog + "subq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
+  std::string epilog = "addq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
+  epilog = epilog + "ret\n\n\n";
+  return new AS::Proc(prolog, body, epilog);
 }
 
 }  // namespace F

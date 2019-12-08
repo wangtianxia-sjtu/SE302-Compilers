@@ -27,6 +27,10 @@ TEMP::Temp* SP();
 TEMP::Temp* FP();
 TEMP::Temp* RV();
 
+TEMP::Temp* NUMERATOR();
+TEMP::Temp* NUMERATOR_HIGHER_64();
+TEMP::Temp* QUOTIENT();
+
 Frame* NewX64Frame(TEMP::Label* name, U::BoolList* formals);
 
 T::Exp* externalCall(std::string s, T::ExpList* args);
@@ -50,6 +54,7 @@ class Frame {
     virtual AccessList* GetLocalList() const = 0;
     virtual Access* AllocLocal(bool escape) = 0;
     virtual T::Stm* GetPrologue() const = 0;
+    virtual int GetSize() const = 0;
 };
 
 class Access {
