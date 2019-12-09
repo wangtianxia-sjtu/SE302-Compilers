@@ -188,7 +188,7 @@ namespace {
       }
       case T::Exp::Kind::NAME: {
         T::NameExp* nameExp = static_cast<T::NameExp *>(e);
-        std::string instr = "movq $" + nameExp->name->Name() + ",`d0";
+        std::string instr = "leaq " + nameExp->name->Name() + "(%rip)" + ",`d0";
         emit(new AS::OperInstr(instr, L(r, nullptr), nullptr, new AS::Targets(nullptr)));
         return r;
       }
@@ -203,7 +203,7 @@ namespace {
         T::CallExp* callExp = static_cast<T::CallExp *>(e);
         T::NameExp* funcExp = static_cast<T::NameExp *>(callExp->fun);
         TEMP::TempList* argsTemps = munchArgs(callExp->args);
-        std::string instr = "call " + funcExp->name->Name();
+        std::string instr = "call " + funcExp->name->Name() + "@PLT";
         emit(new AS::OperInstr(instr, L(F::RV(), F::callersaves()), argsTemps, new AS::Targets(nullptr)));
         emit(new AS::MoveInstr("movq `s0, `d0", L(r, nullptr), L(F::RV(), nullptr)));
         return r;
@@ -285,6 +285,7 @@ namespace {
           assert(0);
         }
         case AS::Instr::Kind::MOVE: {
+          std::map<TEMP::Temp *, TEMP::Temp *> m;
           TEMP::TempList* l;
           AS::MoveInstr* moveInstr = static_cast<AS::MoveInstr *>(instr);
           for (l = moveInstr->src; l; l = l->tail) {
@@ -293,19 +294,35 @@ namespace {
                 F::Access* access = f->AllocLocal(true);
                 temp2offset[l->head] = f->GetSize();
                 std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
-                assert(freeToUse);
-                AS::OperInstr* operInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addBefore(iVector, moveInstr, operInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addBefore(iVector, moveInstr, operInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, L(m[l->head], nullptr), nullptr, new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addBefore(iVector, moveInstr, operInstr);
+                }
               }
               else {
                 std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
-                assert(freeToUse);
-                AS::OperInstr* operInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addBefore(iVector, moveInstr, operInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addBefore(iVector, moveInstr, operInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, L(m[l->head], nullptr), nullptr, new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addBefore(iVector, moveInstr, operInstr);
+                }
               }
             }
           }
@@ -315,25 +332,42 @@ namespace {
                 F::Access* access = f->AllocLocal(true);
                 temp2offset[l->head] = f->GetSize();
                 std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
-                assert(freeToUse);
-                AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addAfter(iVector, moveInstr, operInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addAfter(iVector, moveInstr, operInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(m[l->head], nullptr), new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addAfter(iVector, moveInstr, operInstr);
+                }
               }
               else {
                 std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
-                assert(freeToUse);
-                AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addAfter(iVector, moveInstr, operInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addAfter(iVector, moveInstr, operInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(m[l->head], nullptr), new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addAfter(iVector, moveInstr, operInstr);
+                }
               }
             }
           }
           break;
         }
         case AS::Instr::Kind::OPER: {
+          std::map<TEMP::Temp *, TEMP::Temp *> m;
           TEMP::TempList* l;
           AS::OperInstr* operInstr = static_cast<AS::OperInstr *>(instr);
           for (l = operInstr->src; l; l = l->tail) {
@@ -342,19 +376,35 @@ namespace {
                 F::Access* access = f->AllocLocal(true);
                 temp2offset[l->head] = f->GetSize();
                 std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
-                assert(freeToUse);
-                AS::OperInstr* newInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addBefore(iVector, operInstr, newInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addBefore(iVector, operInstr, newInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, L(m[l->head], nullptr), nullptr, new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addBefore(iVector, operInstr, newInstr);
+                }
               }
               else {
                 std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
-                assert(freeToUse);
-                AS::OperInstr* newInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addBefore(iVector, operInstr, newInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addBefore(iVector, operInstr, newInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, L(m[l->head], nullptr), nullptr, new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addBefore(iVector, operInstr, newInstr);
+                }
               }
             }
           }
@@ -364,19 +414,37 @@ namespace {
                 F::Access* access = f->AllocLocal(true);
                 temp2offset[l->head] = f->GetSize();
                 std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
-                assert(freeToUse);
-                AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addAfter(iVector, operInstr, newInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addAfter(iVector, operInstr, newInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  std::cout << "m hit" << std::endl;
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(m[l->head], nullptr), new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addAfter(iVector, operInstr, newInstr);
+                }
               }
               else {
                 std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
-                assert(freeToUse);
-                AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
-                l->head = freeToUse->head;
-                addAfter(iVector, operInstr, newInstr);
-                freeToUse = freeToUse->tail;
+                if (m.find(l->head) == m.end()) {
+                  assert(freeToUse);
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                  m[l->head] = freeToUse->head;
+                  l->head = freeToUse->head;
+                  addAfter(iVector, operInstr, newInstr);
+                  freeToUse = freeToUse->tail;
+                }
+                else {
+                  std::cout << "m hit" << std::endl;
+                  AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(m[l->head], nullptr), new AS::Targets(nullptr));
+                  l->head = m[l->head];
+                  addAfter(iVector, operInstr, newInstr);
+                }
               }
             }
           }
