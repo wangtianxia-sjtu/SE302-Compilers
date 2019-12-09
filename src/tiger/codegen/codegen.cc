@@ -1,11 +1,17 @@
 #include "tiger/codegen/codegen.h"
 
 #include <iostream>
+#include <vector>
+#include <set>
+#include <map>
 
 namespace {
   AS::InstrList* iList = nullptr;
   AS::InstrList* last = nullptr;
   std::string fs;
+
+  std::map<TEMP::Temp*, int> temp2offset;
+  std::set<TEMP::Temp *> machineReg;
 
   void emit(AS::Instr* inst) {
     if (last) {
@@ -23,6 +29,15 @@ namespace {
   std::string toOpString(T::RelOp op);
   TEMP::Temp* munchExp(T::Exp* e);
   TEMP::TempList* L(TEMP::Temp* h, TEMP::TempList* t);
+
+  AS::InstrList* naiveRegAlloc(F::Frame* f, AS::InstrList* iList);
+  std::vector<AS::Instr *> toVector(AS::InstrList* iList);
+  AS::InstrList* toList(const std::vector<AS::Instr *>& iVector);
+  void addBefore(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr);
+  void addAfter(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr);
+  AS::Instr* processInstr(std::vector<AS::Instr *>& iVector);
+  bool checkTempList(TEMP::TempList* l);
+  
 }
 
 namespace CG {
@@ -38,6 +53,7 @@ AS::InstrList* Codegen(F::Frame* f, T::StmList* stmList) {
 
   list = iList;
   iList = last = nullptr;
+  list = naiveRegAlloc(f, list);
   fs = "";
   return F::F_procEntryExit2(list);
 }
@@ -188,7 +204,7 @@ namespace {
         T::NameExp* funcExp = static_cast<T::NameExp *>(callExp->fun);
         TEMP::TempList* argsTemps = munchArgs(callExp->args);
         std::string instr = "call " + funcExp->name->Name();
-        emit(new AS::OperInstr(instr, F::callersaves(), argsTemps, new AS::Targets(nullptr)));
+        emit(new AS::OperInstr(instr, L(F::RV(), F::callersaves()), argsTemps, new AS::Targets(nullptr)));
         emit(new AS::MoveInstr("movq `s0, `d0", L(r, nullptr), L(F::RV(), nullptr)));
         return r;
       }
@@ -244,10 +260,217 @@ namespace {
         argsregs = argsregs->tail;
       }
       else {
+        assert(0); // Not covered in testcases
         emit(new AS::OperInstr("pushq `s0", nullptr, L(arg, nullptr), new AS::Targets(nullptr))); // No need to consider F::SP() here
       }
       count++;
     }
     return result;
+  }
+
+  AS::InstrList* naiveRegAlloc(F::Frame* f, AS::InstrList* iList) {
+    temp2offset.clear();
+    if (machineReg.empty()) {
+      TEMP::TempList* list = F::registers();
+      for (; list; list = list->tail) {
+        machineReg.insert(list->head);
+      }
+    }
+    std::vector<AS::Instr *> iVector = toVector(iList);
+    AS::Instr* instr;
+    while ((instr = processInstr(iVector)) != nullptr) {
+      TEMP::TempList* freeToUse = F::calleesaves();
+      switch (instr->kind) {
+        case AS::Instr::Kind::LABEL: {
+          assert(0);
+        }
+        case AS::Instr::Kind::MOVE: {
+          TEMP::TempList* l;
+          AS::MoveInstr* moveInstr = static_cast<AS::MoveInstr *>(instr);
+          for (l = moveInstr->src; l; l = l->tail) {
+            if (machineReg.find(l->head) == machineReg.end()) {
+              if (temp2offset.find(l->head) == temp2offset.end()) {
+                F::Access* access = f->AllocLocal(true);
+                temp2offset[l->head] = f->GetSize();
+                std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
+                assert(freeToUse);
+                AS::OperInstr* operInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addBefore(iVector, moveInstr, operInstr);
+                freeToUse = freeToUse->tail;
+              }
+              else {
+                std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
+                assert(freeToUse);
+                AS::OperInstr* operInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addBefore(iVector, moveInstr, operInstr);
+                freeToUse = freeToUse->tail;
+              }
+            }
+          }
+          for (l = moveInstr->dst; l; l=l->tail) {
+            if (machineReg.find(l->head) == machineReg.end()) {
+              if (temp2offset.find(l->head) == temp2offset.end()) {
+                F::Access* access = f->AllocLocal(true);
+                temp2offset[l->head] = f->GetSize();
+                std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
+                assert(freeToUse);
+                AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addAfter(iVector, moveInstr, operInstr);
+                freeToUse = freeToUse->tail;
+              }
+              else {
+                std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
+                assert(freeToUse);
+                AS::OperInstr* operInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addAfter(iVector, moveInstr, operInstr);
+                freeToUse = freeToUse->tail;
+              }
+            }
+          }
+          break;
+        }
+        case AS::Instr::Kind::OPER: {
+          TEMP::TempList* l;
+          AS::OperInstr* operInstr = static_cast<AS::OperInstr *>(instr);
+          for (l = operInstr->src; l; l = l->tail) {
+            if (machineReg.find(l->head) == machineReg.end()) {
+              if (temp2offset.find(l->head) == temp2offset.end()) {
+                F::Access* access = f->AllocLocal(true);
+                temp2offset[l->head] = f->GetSize();
+                std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
+                assert(freeToUse);
+                AS::OperInstr* newInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addBefore(iVector, operInstr, newInstr);
+                freeToUse = freeToUse->tail;
+              }
+              else {
+                std::string s = "movq (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp), " + "`d0";
+                assert(freeToUse);
+                AS::OperInstr* newInstr = new AS::OperInstr(s, L(freeToUse->head, nullptr), nullptr, new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addBefore(iVector, operInstr, newInstr);
+                freeToUse = freeToUse->tail;
+              }
+            }
+          }
+          for (l = operInstr->dst; l; l=l->tail) {
+            if (machineReg.find(l->head) == machineReg.end()) {
+              if (temp2offset.find(l->head) == temp2offset.end()) {
+                F::Access* access = f->AllocLocal(true);
+                temp2offset[l->head] = f->GetSize();
+                std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
+                assert(freeToUse);
+                AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addAfter(iVector, operInstr, newInstr);
+                freeToUse = freeToUse->tail;
+              }
+              else {
+                std::string s = "movq `s0, (" + fs + "-" + std::to_string(temp2offset[l->head]) + ")(%rsp)";
+                assert(freeToUse);
+                AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(freeToUse->head, nullptr), new AS::Targets(nullptr));
+                l->head = freeToUse->head;
+                addAfter(iVector, operInstr, newInstr);
+                freeToUse = freeToUse->tail;
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+    return toList(iVector);
+  }
+
+  std::vector<AS::Instr *> toVector(AS::InstrList* iList) {
+    std::vector<AS::Instr *> result;
+    while (iList) {
+      result.push_back(iList->head);
+      iList = iList->tail;
+    }
+    return result;
+  }
+
+  AS::InstrList* toList(const std::vector<AS::Instr *>& iVector) {
+    AS::InstrList* result = nullptr;
+    for (std::vector<AS::Instr *>::const_reverse_iterator cri = iVector.crbegin(); cri != iVector.crend(); ++cri) {
+      result = new AS::InstrList(*cri, result);
+    }
+    return result;
+  }
+
+  void addBefore(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr) {
+    std::vector<AS::Instr *>::iterator it;
+    for (it = iVector.begin(); it != iVector.end(); ++it) {
+      if ((*it) == pos)
+        break;
+    }
+    if (it == iVector.end())
+      assert(0);
+    iVector.insert(it, newInstr);
+  }
+
+  void addAfter(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr) {
+    std::vector<AS::Instr *>::iterator it;
+    bool found = false;
+    for (it = iVector.begin(); it != iVector.end(); ++it) {
+      if ((*it) == pos) {
+        ++it;
+        found = true;
+        break;
+      }
+    }
+    if (found == false)
+      assert(0);
+    iVector.insert(it, newInstr);
+  }
+
+  AS::Instr* processInstr(std::vector<AS::Instr *>& iVector) {
+    std::vector<AS::Instr *>::iterator it;
+    bool found = false;
+    AS::Instr* instr;
+    for (it = iVector.begin(); it != iVector.end(); ++it) {
+      instr = *it;
+      switch (instr->kind) {
+
+        case AS::Instr::Kind::LABEL: {
+          break;
+        }
+
+        case AS::Instr::Kind::MOVE: {
+          AS::MoveInstr* moveInstr = static_cast<AS::MoveInstr *>(instr);
+          if (!checkTempList(moveInstr->dst) || !checkTempList(moveInstr->src)) {
+            return moveInstr;
+          }
+          break;
+        }
+
+        case AS::Instr::Kind::OPER: {
+          AS::OperInstr* operInstr = static_cast<AS::OperInstr *>(instr);
+          if (!checkTempList(operInstr->dst) || !checkTempList(operInstr->src)) {
+            return operInstr;
+          }
+          break;
+        }
+
+        default:
+          assert(0);
+      }
+    }
+    return nullptr;
+  }
+
+  bool checkTempList(TEMP::TempList* l) {
+    while (l) {
+      if (machineReg.find(l->head) == machineReg.end())
+        return false;
+      l = l->tail;
+    }
+    return true;
   }
 }

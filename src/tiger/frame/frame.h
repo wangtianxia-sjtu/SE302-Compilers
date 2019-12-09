@@ -17,6 +17,7 @@ extern const int wordSize;
 
 TEMP::Map* tempMap();
 TEMP::TempList* registers();
+void tempInit();
 
 TEMP::TempList* specialregs();
 TEMP::TempList* argregs();

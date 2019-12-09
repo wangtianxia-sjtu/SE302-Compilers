@@ -553,6 +553,7 @@ AS::InstrList* F_procEntryExit2(AS::InstrList* body) {
 AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body) {
   std::string fs = frame->GetName()->Name() + "_framesize";
   std::string prolog = ".set " + fs + "," + std::to_string(frame->GetSize()) + "\n";
+  prolog = prolog + frame->GetName()->Name() + ":\n";
   prolog = prolog + "subq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
   std::string epilog = "addq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
   epilog = epilog + "ret\n\n\n";

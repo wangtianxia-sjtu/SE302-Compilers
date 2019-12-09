@@ -23,6 +23,7 @@ namespace {
 TEMP::Map* temp_map;
 
 void do_proc(FILE* out, F::ProcFrag* procFrag) {
+  F::tempInit();
   temp_map = F::tempMap();
   // Init temp_map
 
