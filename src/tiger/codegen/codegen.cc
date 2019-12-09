@@ -279,7 +279,7 @@ namespace {
     std::vector<AS::Instr *> iVector = toVector(iList);
     AS::Instr* instr;
     while ((instr = processInstr(iVector)) != nullptr) {
-      TEMP::TempList* freeToUse = F::calleesaves();
+      TEMP::TempList* freeToUse = F::callersaves();
       switch (instr->kind) {
         case AS::Instr::Kind::LABEL: {
           assert(0);
