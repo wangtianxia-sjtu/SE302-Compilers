@@ -1,0 +1,8 @@
+let
+function dosort(a:int, b:int) =
+(
+   printi(b)
+)
+in
+   dosort(666, 777)
+end
