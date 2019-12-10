@@ -423,7 +423,7 @@ namespace {
                   freeToUse = freeToUse->tail;
                 }
                 else {
-                  std::cout << "m hit" << std::endl;
+                  // std::cout << "m hit" << std::endl;
                   AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(m[l->head], nullptr), new AS::Targets(nullptr));
                   l->head = m[l->head];
                   addAfter(iVector, operInstr, newInstr);
@@ -440,7 +440,7 @@ namespace {
                   freeToUse = freeToUse->tail;
                 }
                 else {
-                  std::cout << "m hit" << std::endl;
+                  // std::cout << "m hit" << std::endl;
                   AS::OperInstr* newInstr = new AS::OperInstr(s, nullptr, L(m[l->head], nullptr), new AS::Targets(nullptr));
                   l->head = m[l->head];
                   addAfter(iVector, operInstr, newInstr);

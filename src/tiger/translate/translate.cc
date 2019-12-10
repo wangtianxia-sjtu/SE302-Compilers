@@ -444,7 +444,7 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
   A::ExpList* argList = args;
   while (formals && argList) {
     TY::Ty* formalsHead = formals->head;
-    A::Exp* expHead = args->head;
+    A::Exp* expHead = argList->head;
     TR::ExpAndTy expHeadResult = expHead->Translate(venv, tenv, level, label);
     if (!formalsHead->IsSameType(expHeadResult.ty)) {
       errormsg.Error(pos, "para type mismatch");
