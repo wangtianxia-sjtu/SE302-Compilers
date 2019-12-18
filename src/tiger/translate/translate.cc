@@ -855,7 +855,7 @@ TR::Exp *FunctionDec::Translate(S::Table<E::EnvEntry> *venv,
 TR::Exp *VarDec::Translate(S::Table<E::EnvEntry> *venv, S::Table<TY::Ty> *tenv,
                            TR::Level *level, TEMP::Label *label) const {
   TR::ExpAndTy initResult = init->Translate(venv, tenv, level, label);
-  TR::Access* access = TR::Access::AllocLocal(level, true);
+  TR::Access* access = TR::Access::AllocLocal(level, escape);
   if (typ) {
     TY::Ty* type = tenv->Look(typ);
     if (!type) {

@@ -179,7 +179,7 @@ class Exp {
 
   // Escape Analysis
   virtual void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const = 0;
+                        int depth) = 0;
 };
 
 class VarExp : public Exp {
@@ -196,7 +196,7 @@ class VarExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class NilExp : public Exp {
@@ -212,7 +212,7 @@ class NilExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class IntExp : public Exp {
@@ -229,7 +229,7 @@ class IntExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class StringExp : public Exp {
@@ -246,7 +246,7 @@ class StringExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class CallExp : public Exp {
@@ -265,7 +265,7 @@ class CallExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class OpExp : public Exp {
@@ -284,7 +284,7 @@ class OpExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class RecordExp : public Exp {
@@ -303,7 +303,7 @@ class RecordExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class SeqExp : public Exp {
@@ -320,7 +320,7 @@ class SeqExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class AssignExp : public Exp {
@@ -339,7 +339,7 @@ class AssignExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class IfExp : public Exp {
@@ -358,7 +358,7 @@ class IfExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class WhileExp : public Exp {
@@ -377,7 +377,7 @@ class WhileExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class ForExp : public Exp {
@@ -398,7 +398,7 @@ class ForExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class BreakExp : public Exp {
@@ -413,7 +413,7 @@ class BreakExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class LetExp : public Exp {
@@ -432,7 +432,7 @@ class LetExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class ArrayExp : public Exp {
@@ -451,7 +451,7 @@ class ArrayExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class VoidExp : public Exp {
@@ -466,7 +466,7 @@ class VoidExp : public Exp {
                          TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 /*
@@ -494,7 +494,7 @@ class Dec {
 
   // Escape Analysis
   virtual void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const = 0;
+                        int depth) = 0;
 };
 
 class FunctionDec : public Dec {
@@ -512,7 +512,7 @@ class FunctionDec : public Dec {
                      TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class VarDec : public Dec {
@@ -533,7 +533,7 @@ class VarDec : public Dec {
                      TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 class TypeDec : public Dec {
@@ -550,7 +550,7 @@ class TypeDec : public Dec {
                      TR::Level *level, TEMP::Label *label) const override;
 
   void Traverse(S::Table<ESC::EscapeEntry> *env,
-                        int depth) const override;
+                        int depth) override;
 };
 
 /*
