@@ -31,6 +31,7 @@ TEMP::Temp* RV();
 TEMP::Temp* NUMERATOR();
 TEMP::Temp* NUMERATOR_HIGHER_64();
 TEMP::Temp* QUOTIENT();
+TEMP::Temp* REMAINDER();
 
 Frame* NewX64Frame(TEMP::Label* name, U::BoolList* formals);
 

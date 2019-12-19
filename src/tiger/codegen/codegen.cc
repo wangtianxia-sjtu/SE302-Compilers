@@ -80,9 +80,9 @@ namespace {
         if (dst->kind == T::Exp::MEM) {
           T::MemExp* dstMemExp = static_cast<T::MemExp *>(dst);
           TEMP::Temp* dstTemp = munchExp(dstMemExp->exp);
-          emit(new AS::MoveInstr("movq `s0, (`s1)", 
+          emit(new AS::OperInstr("movq `s0, (`s1)", 
                 nullptr,
-                  new TEMP::TempList(srcTemp, new TEMP::TempList(dstTemp, nullptr))));
+                  new TEMP::TempList(srcTemp, new TEMP::TempList(dstTemp, nullptr)), new AS::Targets(nullptr)));
           return;
         }
 
@@ -158,7 +158,7 @@ namespace {
           case T::BinOp::DIV_OP: {
             emit(new AS::MoveInstr("movq `s0,`d0", L(F::NUMERATOR(), nullptr), L(left, nullptr)));
             emit(new AS::OperInstr("cqto", L(F::NUMERATOR(), L(F::NUMERATOR_HIGHER_64(), nullptr)), L(F::NUMERATOR(), nullptr), new AS::Targets(nullptr)));
-            emit(new AS::OperInstr("idivq `s0", L(F::QUOTIENT(), nullptr), L(right, L(F::NUMERATOR(), L(F::NUMERATOR_HIGHER_64(), nullptr))), new AS::Targets(nullptr)));
+            emit(new AS::OperInstr("idivq `s0", L(F::QUOTIENT(), L(F::REMAINDER(), nullptr)), L(right, L(F::NUMERATOR(), L(F::NUMERATOR_HIGHER_64(), nullptr))), new AS::Targets(nullptr)));
             emit(new AS::MoveInstr("movq `s0,`d0", L(r, nullptr), L(F::QUOTIENT(), nullptr)));
             break;
           }
@@ -171,7 +171,7 @@ namespace {
       case T::Exp::Kind::MEM: {
         T::MemExp* memExp = static_cast<T::MemExp *>(e);
         TEMP::Temp* addr = munchExp(memExp->exp);
-        emit(new AS::MoveInstr("movq (`s0),`d0", L(r, nullptr), L(addr, nullptr)));
+        emit(new AS::OperInstr("movq (`s0),`d0", L(r, nullptr), L(addr, nullptr), new AS::Targets(nullptr)));
         return r;
       }
       case T::Exp::Kind::TEMP: {
@@ -196,7 +196,7 @@ namespace {
         T::ConstExp* constExp = static_cast<T::ConstExp *>(e);
         std::string constString = std::to_string(constExp->consti);
         std::string instr = "movq $" + constString + ",`d0";
-        emit(new AS::MoveInstr(instr, L(r, nullptr), nullptr));
+        emit(new AS::OperInstr(instr, L(r, nullptr), nullptr, new AS::Targets(nullptr)));
         return r;
       }
       case T::Exp::Kind::CALL: {

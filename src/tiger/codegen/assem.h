@@ -24,6 +24,12 @@ class Instr {
   Instr(Kind kind) : kind(kind) {}
 
   virtual void Print(FILE* out, TEMP::Map* m) const = 0;
+
+  virtual std::string GetAssem() const = 0;
+
+  virtual TEMP::TempList* GetDef() const = 0;
+
+  virtual TEMP::TempList* GetUse() const = 0;
 };
 
 class OperInstr : public Instr {
@@ -37,6 +43,18 @@ class OperInstr : public Instr {
       : Instr(OPER), assem(assem), dst(dst), src(src), jumps(jumps) {}
 
   void Print(FILE* out, TEMP::Map* m) const override;
+
+  std::string GetAssem() const override {
+    return assem;
+  }
+
+  TEMP::TempList* GetDef() const override {
+    return dst;
+  }
+
+  TEMP::TempList* GetUse() const override {
+    return src;
+  }
 };
 
 class LabelInstr : public Instr {
@@ -48,6 +66,18 @@ class LabelInstr : public Instr {
       : Instr(LABEL), assem(assem), label(label) {}
 
   void Print(FILE* out, TEMP::Map* m) const override;
+
+  std::string GetAssem() const override {
+    return assem;
+  }
+
+  TEMP::TempList* GetDef() const override {
+    return nullptr;
+  }
+
+  TEMP::TempList* GetUse() const override {
+    return nullptr;
+  }
 };
 
 class MoveInstr : public Instr {
@@ -59,6 +89,18 @@ class MoveInstr : public Instr {
       : Instr(MOVE), assem(assem), dst(dst), src(src) {}
 
   void Print(FILE* out, TEMP::Map* m) const override;
+
+  std::string GetAssem() const override {
+    return assem;
+  }
+
+  TEMP::TempList* GetDef() const override {
+    return dst;
+  }
+
+  TEMP::TempList* GetUse() const override {
+    return src;
+  }
 };
 
 class InstrList {

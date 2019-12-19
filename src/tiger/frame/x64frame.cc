@@ -272,6 +272,10 @@ TEMP::Temp* QUOTIENT() {
   return RAX();
 }
 
+TEMP::Temp* REMAINDER() {
+  return RDX();
+}
+
 class X64Frame : public Frame {
   // TODO: Put your codes here (lab6).
   private:
