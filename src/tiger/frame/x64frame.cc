@@ -23,6 +23,7 @@ namespace {
   TEMP::Temp* fp = nullptr;
   TEMP::Map* realTempMap = nullptr;
   TEMP::TempList* registersList = nullptr;
+  TEMP::TempList* allocatableRegisterList = nullptr;
   TEMP::TempList* specialregsList = nullptr;
   TEMP::TempList* argregsList = nullptr;
   TEMP::TempList* calleesavesList = nullptr;
@@ -158,6 +159,7 @@ void tempInit() {
   argregs();
   calleesaves();
   callersaves();
+  allocatableRegisters();
 }
 
 TEMP::Map* tempMap() {
@@ -203,6 +205,26 @@ TEMP::TempList* registers() {
                     new TEMP::TempList(R15(), nullptr))))))))))))))));
   }
   return registersList;
+}
+
+TEMP::TempList* allocatableRegisters() {
+  if (!allocatableRegisterList) {
+    allocatableRegisterList = new TEMP::TempList(RAX(), // No %rsp here
+                              new TEMP::TempList(RBP(), 
+                              new TEMP::TempList(RBX(), 
+                              new TEMP::TempList(RDI(),
+                              new TEMP::TempList(RSI(),
+                              new TEMP::TempList(RDX(),
+                              new TEMP::TempList(RCX(),
+                              new TEMP::TempList(R8(),
+                              new TEMP::TempList(R9(),
+                              new TEMP::TempList(R10(),
+                              new TEMP::TempList(R11(),
+                              new TEMP::TempList(R12(),
+                              new TEMP::TempList(R13(),
+                              new TEMP::TempList(R14(),
+                              new TEMP::TempList(R15(), nullptr)))))))))))))));
+  }
 }
 
 TEMP::TempList* specialregs() {

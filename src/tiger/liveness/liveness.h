@@ -16,6 +16,15 @@ class MoveList {
 
   MoveList(G::Node<TEMP::Temp>* src, G::Node<TEMP::Temp>* dst, MoveList* tail)
       : src(src), dst(dst), tail(tail) {}
+
+  bool InMoveList(G::Node<TEMP::Temp>* src, G::Node<TEMP::Temp>* dst) const {
+    const MoveList* head = this;
+    for (; head; head = head->tail) {
+      if (head->src == src && head->dst == dst)
+        return true;
+    }
+    return false;
+  }
 };
 
 class LiveGraph {
