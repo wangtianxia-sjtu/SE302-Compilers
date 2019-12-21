@@ -120,9 +120,11 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
           if (outTemp == F::SP())
             continue;
           G::Node<TEMP::Temp>* outNode = temp2node[outTemp];
-          if (!outNode->Adj() || !outNode->Adj()->InNodeList(defNode)) {
-            result.graph->AddEdge(defNode, outNode);
-            result.graph->AddEdge(outNode, defNode);
+          if (defNode != outNode) {
+            if (!outNode->Adj() || !outNode->Adj()->InNodeList(defNode)) {
+              result.graph->AddEdge(defNode, outNode);
+              result.graph->AddEdge(outNode, defNode);
+            }
           }
         }
       }
@@ -149,9 +151,11 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
             continue;
           G::Node<TEMP::Temp>* outNode = temp2node[outTemp];
           assert(outNode);
-          if (!(outNode->Adj() && outNode->Adj()->InNodeList(defNode)) && !inTempList(node->NodeInfo()->GetUse(), outTemp)) {
-            result.graph->AddEdge(defNode, outNode);
-            result.graph->AddEdge(outNode, defNode);
+          if (outNode != defNode) {
+            if (!(outNode->Adj() && outNode->Adj()->InNodeList(defNode)) && !inTempList(node->NodeInfo()->GetUse(), outTemp)) {
+              result.graph->AddEdge(defNode, outNode);
+              result.graph->AddEdge(outNode, defNode);
+            }
           }
         }
 

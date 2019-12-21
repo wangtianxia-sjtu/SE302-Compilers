@@ -242,6 +242,40 @@ void Graph<T>::Show(FILE* out, NodeList<T>* p, void showInfo(T*)) {
   }
 }
 
+template <class T>
+bool inNodeList(G::Node<T>* node, G::NodeList<T>* list) {
+  for (G::NodeList<T>* h = list; h; h = h->tail) {
+    if (list->head == node)
+      return true;
+  }
+  return false;
+}
+
+template <class T>
+G::NodeList<T>* unionNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
+  if (!l1)
+    return l2;
+  G::NodeList<T>* result = l1;
+  for (G::NodeList<T>* head = l2; head; head = head->tail) {
+    assert(head->head);
+    if (!result->InNodeList(head->head)) {
+      result = new G::NodeList<T>(head->head, result);
+    }
+  }
+  return result;
+}
+
+template <class T>
+G::NodeList<T>* minusNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
+  G::NodeList<T>* result = nullptr;
+  for (G::NodeList<T>* head = l1; head; head = head->tail) {
+    assert(head->head);
+    if (!inNodeList(head->head, l2)) {
+      result = new G::NodeList<T>(head->head, result);
+    }
+  }
+}
+
 }  // namespace G
 
 #endif
