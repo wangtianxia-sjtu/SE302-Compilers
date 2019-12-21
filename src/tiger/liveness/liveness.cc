@@ -33,12 +33,14 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
     ok = true;
     for (G::NodeList<AS::Instr>* head = flowgraph->Nodes(); head; head = head->tail) {
       G::Node<AS::Instr>* node = head->head;
+      assert(node);
       TEMP::TempList* in_old = node2in[node];
       TEMP::TempList* out_old = node2out[node];
       node2in[node] = unionTempList(node->NodeInfo()->GetUse(), 
                                     minusTempList(node2out[node], node->NodeInfo()->GetDef()));
       TEMP::TempList* union_succ_in = nullptr;
       for (G::NodeList<AS::Instr>* succ = node->Succ(); succ; succ = succ->tail) {
+        assert(succ->head);
         TEMP::TempList* in_succ = node2in[succ->head];
         union_succ_in = unionTempList(union_succ_in, in_succ);
       }
@@ -55,6 +57,7 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
 
   // Add machine registers into the interference graph
   for (TEMP::TempList* head = F::allocatableRegisters(); head; head = head->tail) {
+    assert(head->head);
     G::Node<TEMP::Temp>* node = result.graph->NewNode(head->head);
     assert(node);
     temp2node[head->head] = node;
@@ -79,7 +82,7 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
                                node->NodeInfo()->GetUse())));
     for (TEMP::TempList* head = allTemps; head; head = head->tail) {
       assert(head->head);
-      if (head->head == F::SP())
+      if (head->head == F::SP()) // %rsp is not allocatable
         continue;
       if (temp2node.find(head->head) == temp2node.end()) {
         G::Node<TEMP::Temp>* node = result.graph->NewNode(head->head);
@@ -91,11 +94,18 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
   // Add edges between temporary registers P229
   for (G::NodeList<AS::Instr>* head = flowgraph->Nodes(); head; head = head->tail) {
     G::Node<AS::Instr>* node = head->head;
+    assert(node);
     TEMP::TempList* def = node->NodeInfo()->GetDef();
     if (!def)
       continue;
 
     if (!FG::IsMove(node)) {
+
+      /*
+       * P229 Rule 1
+       * Non-move instructions => Add edges between def and out
+       */
+
       for (TEMP::TempList* defHead = def; defHead; defHead = defHead->tail) {
         assert(defHead->head);
         TEMP::Temp* defTemp = defHead->head;
@@ -110,7 +120,7 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
           if (outTemp == F::SP())
             continue;
           G::Node<TEMP::Temp>* outNode = temp2node[outTemp];
-          if (!outNode->Adj()->InNodeList(defNode)) {
+          if (!outNode->Adj() || !outNode->Adj()->InNodeList(defNode)) {
             result.graph->AddEdge(defNode, outNode);
             result.graph->AddEdge(outNode, defNode);
           }
@@ -118,6 +128,12 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
       }
     }
     else {
+
+      /*
+       * P229 Rule 2
+       * Move instructions => Add edges between def and (out - use)
+       */
+
       for (TEMP::TempList* defHead = def; defHead; defHead = defHead->tail) {
         assert(defHead->head);
         TEMP::Temp* defTemp = defHead->head;
@@ -132,6 +148,7 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
           if (outTemp == F::SP())
             continue;
           G::Node<TEMP::Temp>* outNode = temp2node[outTemp];
+          assert(outNode);
           if (!(outNode->Adj() && outNode->Adj()->InNodeList(defNode)) && !inTempList(node->NodeInfo()->GetUse(), outTemp)) {
             result.graph->AddEdge(defNode, outNode);
             result.graph->AddEdge(outNode, defNode);
@@ -149,7 +166,6 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph) {
             result.moves = new MoveList(useNode, defNode, result.moves);
           }
         }
-
       }
     }
   }

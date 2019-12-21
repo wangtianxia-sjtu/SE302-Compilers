@@ -75,6 +75,7 @@ namespace {
   std::vector<AS::Instr *> toVector(AS::InstrList* iList) {
     std::vector<AS::Instr *> result;
     for (AS::InstrList* head = iList; head; head = head->tail) {
+      assert(head->head);
       result.push_back(head->head);
     }
     return result;
