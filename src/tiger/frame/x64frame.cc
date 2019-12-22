@@ -28,11 +28,13 @@ namespace {
   TEMP::TempList* argregsList = nullptr;
   TEMP::TempList* calleesavesList = nullptr;
   TEMP::TempList* callersavesList = nullptr;
+  enum RegisterColor { RAX, RBP, RBX, RDI, RSI, RDX, RCX, R8, R9, R10, R11, R12, R13, R14, R15 };
 }
 
 namespace F {
 
 const int wordSize = 8;
+const int K = 15;
 
 class InFrameAccess : public Access {
  public:
@@ -296,6 +298,42 @@ TEMP::Temp* QUOTIENT() {
 
 TEMP::Temp* REMAINDER() {
   return RDX();
+}
+
+int defaultRegisterColor(TEMP::Temp* t) {
+  assert(t != RSP());
+  assert(t);
+  if (t == RAX())
+    return RegisterColor::RAX;
+  else if (t == RBP())
+    return RegisterColor::RBP;
+  else if (t == RBX())
+    return RegisterColor::RBX;
+  else if (t == RDI())
+    return RegisterColor::RDI;
+  else if (t == RSI())
+    return RegisterColor::RSI;
+  else if (t == RDX())
+    return RegisterColor::RDX;
+  else if (t == RCX())
+    return RegisterColor::RCX;
+  else if (t == R8())
+    return RegisterColor::R8;
+  else if (t == R9())
+    return RegisterColor::R9;
+  else if (t == R10())
+    return RegisterColor::R10;
+  else if (t == R11())
+    return RegisterColor::R11;
+  else if (t == R12())
+    return RegisterColor::R12;
+  else if (t == R13())
+    return RegisterColor::R13;
+  else if (t == R14())
+    return RegisterColor::R14;
+  else if (t == R15())
+    return RegisterColor::R15;
+  return -1;
 }
 
 class X64Frame : public Frame {

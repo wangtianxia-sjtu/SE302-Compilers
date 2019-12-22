@@ -245,7 +245,7 @@ void Graph<T>::Show(FILE* out, NodeList<T>* p, void showInfo(T*)) {
 template <class T>
 bool inNodeList(G::Node<T>* node, G::NodeList<T>* list) {
   for (G::NodeList<T>* h = list; h; h = h->tail) {
-    if (list->head == node)
+    if (h->head == node)
       return true;
   }
   return false;

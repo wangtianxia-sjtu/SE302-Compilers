@@ -35,6 +35,51 @@ class LiveGraph {
 
 LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph);
 
+bool inMoveList(G::Node<TEMP::Temp>* src, G::Node<TEMP::Temp>* dst, MoveList* list) {
+  for (; list; list = list->tail) {
+    if (src == list->src && dst == list->dst) {
+      return true;
+    }
+  }
+  return false;
+}
+
+MoveList* intersectMoveList(MoveList* left, MoveList* right) {
+  if (!left || !right)
+    return nullptr;
+  MoveList* result = nullptr;
+  for (; left; left = left->tail) {
+    if (right->InMoveList(left->src, left->dst)) {
+      result = new MoveList(left->src, left->dst, result);
+    }
+  }
+  return result;
+}
+
+MoveList* unionMoveList(MoveList* left, MoveList* right) {
+  if (!left)
+    return right;
+  if (!right)
+    return left;
+  MoveList* result = left;
+  for (; right; right = right->tail) {
+    if (!result->InMoveList(right->src, right->dst)) {
+      result = new MoveList(right->src, right->dst, result);
+    }
+  }
+  return result;
+}
+
+MoveList* minusMoveList(MoveList* left, MoveList* right) {
+  MoveList* result = nullptr;
+  for (; left; left = left->tail) {
+    if (!inMoveList(left->src, left->dst, right)) {
+      result = new MoveList(left->src, left->dst, result);
+    }
+  }
+  return result;
+}
+
 }  // namespace LIVE
 
 #endif

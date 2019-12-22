@@ -14,6 +14,7 @@ class Access;
 class AccessList;
 
 extern const int wordSize;
+extern const int K; // Used in register allocation phase
 
 TEMP::Map* tempMap();
 TEMP::TempList* registers();
@@ -41,6 +42,8 @@ T::Exp* externalCall(std::string s, T::ExpList* args);
 T::Stm* F_procEntryExit1(Frame* frame, T::Stm* stm); // P172 P267-269 TODO
 AS::InstrList* F_procEntryExit2(AS::InstrList* body); // P215 TODO
 AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269 TODO
+
+int defaultRegisterColor(TEMP::Temp* t);
 
 
 class Frame {
