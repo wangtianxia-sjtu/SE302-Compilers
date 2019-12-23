@@ -35,7 +35,7 @@ class LiveGraph {
 
 LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph);
 
-bool inMoveList(G::Node<TEMP::Temp>* src, G::Node<TEMP::Temp>* dst, MoveList* list) {
+inline bool inMoveList(G::Node<TEMP::Temp>* src, G::Node<TEMP::Temp>* dst, MoveList* list) {
   assert(src && dst);
   for (; list; list = list->tail) {
     if (src == list->src && dst == list->dst) {
@@ -45,7 +45,7 @@ bool inMoveList(G::Node<TEMP::Temp>* src, G::Node<TEMP::Temp>* dst, MoveList* li
   return false;
 }
 
-MoveList* intersectMoveList(MoveList* left, MoveList* right) {
+inline MoveList* intersectMoveList(MoveList* left, MoveList* right) {
   if (!left || !right)
     return nullptr;
   MoveList* result = nullptr;
@@ -57,7 +57,7 @@ MoveList* intersectMoveList(MoveList* left, MoveList* right) {
   return result;
 }
 
-MoveList* unionMoveList(MoveList* left, MoveList* right) {
+inline MoveList* unionMoveList(MoveList* left, MoveList* right) {
   MoveList* result = nullptr;
   for (; left; left = left->tail) {
     if (!inMoveList(left->src, left->dst, result)) {
@@ -72,7 +72,7 @@ MoveList* unionMoveList(MoveList* left, MoveList* right) {
   return result;
 }
 
-MoveList* minusMoveList(MoveList* left, MoveList* right) {
+inline MoveList* minusMoveList(MoveList* left, MoveList* right) {
   MoveList* result = nullptr;
   for (; left; left = left->tail) {
     if (!inMoveList(left->src, left->dst, right) && !inMoveList(left->src, left->dst, result)) {

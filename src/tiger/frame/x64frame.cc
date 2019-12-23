@@ -270,6 +270,22 @@ TEMP::TempList* callersaves() {
   return callersavesList;
 }
 
+TEMP::TempList* notCalleesaves() {
+  static TEMP::TempList* notCalleesavesList = nullptr;
+  if (!notCalleesavesList) {
+    notCalleesavesList = new TEMP::TempList(RAX(), // Other 9 registers
+                         new TEMP::TempList(RDI(),
+                         new TEMP::TempList(RSI(),
+                         new TEMP::TempList(RDX(),
+                         new TEMP::TempList(RCX(),
+                         new TEMP::TempList(R8(),
+                         new TEMP::TempList(R9(),
+                         new TEMP::TempList(R10(),
+                         new TEMP::TempList(R11(), nullptr)))))))));
+  }
+  return notCalleesavesList;
+}
+
 TEMP::Temp* SP() {
   return RSP();
 }
@@ -334,6 +350,45 @@ int defaultRegisterColor(TEMP::Temp* t) {
   else if (t == R15())
     return RegisterColor::R15;
   return -1;
+}
+
+std::string* color2register(int color) {
+  switch (color) {
+    case RegisterColor::RAX:
+      return new std::string("%rax");
+    case RegisterColor::RBP:
+      return new std::string("%rbp");
+    case RegisterColor::RBX:
+      return new std::string("%rbx");
+    case RegisterColor::RDI:
+      return new std::string("%rdi");
+    case RegisterColor::RSI:
+      return new std::string("%rsi");
+    case RegisterColor::RDX:
+      return new std::string("%rdx");
+    case RegisterColor::RCX:
+      return new std::string("%rcx");
+    case RegisterColor::R8:
+      return new std::string("%r8");
+    case RegisterColor::R9:
+      return new std::string("%r9");
+    case RegisterColor::R10:
+      return new std::string("%r10");
+    case RegisterColor::R11:
+      return new std::string("%r11");
+    case RegisterColor::R12:
+      return new std::string("%r12");
+    case RegisterColor::R13:
+      return new std::string("%r13");
+    case RegisterColor::R14:
+      return new std::string("%r14");
+    case RegisterColor::R15:
+      return new std::string("%r15");
+    default:
+      assert(0);
+  }
+  assert(0);
+  return nullptr;
 }
 
 class X64Frame : public Frame {

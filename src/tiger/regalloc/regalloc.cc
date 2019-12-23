@@ -4,6 +4,7 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <iostream>
 
 namespace {
   LIVE::LiveGraph liveGraph;
@@ -53,6 +54,12 @@ namespace {
   TEMP::Map* AssignRegisters();
   void AddEdge(G::Node<TEMP::Temp>* u, G::Node<TEMP::Temp>* v);
   LIVE::MoveList* NodeMoves(G::Node<TEMP::Temp>* n);
+
+  void addBefore(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr);
+  void addAfter(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr);
+  AS::Instr* findSpilledInstr(std::vector<AS::Instr *>& iVector, TEMP::Temp* spilledTemp);
+
+  void AssertNode(G::Node<TEMP::Temp>* n);
 }
 
 namespace RA {
@@ -89,6 +96,9 @@ Result RegAlloc(F::Frame* f, AS::InstrList* il) {
     if (spilledNodes) {
       RewriteProgram(f);
       done = false;
+    }
+    else {
+      done = true;
     }
   }
 
@@ -218,7 +228,7 @@ namespace {
     assert(node2degree.find(n) != node2degree.end());
     int oldDegree = node2degree[n];
     node2degree[n]--;
-    if (oldDegree == F::K && node2color[n] == -1) { // TODO: node2color[n] == -1? Why?
+    if (oldDegree == F::K /*&& node2color[n] == -1*/) { // TODO: node2color[n] == -1? Why?
       EnableMoves(new G::NodeList<TEMP::Temp>(n, Adjacent(n)));
       spillWorklist = G::minusNodeList(spillWorklist, new G::NodeList<TEMP::Temp>(n, nullptr));
       if (MoveRelated(n)) {
@@ -252,6 +262,9 @@ namespace {
     x = worklistMoves->src;
     y = worklistMoves->dst;
 
+    AssertNode(x);
+    AssertNode(y);
+
     if (G::inNodeList(GetAlias(y), precolored)) {
       u = GetAlias(y);
       v = GetAlias(x);
@@ -274,6 +287,7 @@ namespace {
     else if ((G::inNodeList(u, precolored) && OK(v, u)) // Note: OK is implemented differently from the text book
     || (!G::inNodeList(u, precolored) && Conservative(G::unionNodeList(Adjacent(u), Adjacent(v))))) {
       coalescedMoves = new LIVE::MoveList(x, y, coalescedMoves);
+      AssertNode(u);
       Combine(u, v);
       AddWorkList(u);
     }
@@ -283,6 +297,7 @@ namespace {
   }
 
   G::Node<TEMP::Temp>* GetAlias(G::Node<TEMP::Temp>* n) {
+    assert(n);
     if (G::inNodeList(n, coalescedNodes)) {
       return GetAlias(node2alias[n]);
     }
@@ -331,6 +346,7 @@ namespace {
     }
     coalescedNodes = new G::NodeList<TEMP::Temp>(v, coalescedNodes);
     node2alias[v] = u;
+    AssertNode(u);
     node2moveList[u] = LIVE::unionMoveList(node2moveList[u], node2moveList[v]); // TODO: nodeMove?
     for (G::NodeList<TEMP::Temp>* adj = Adjacent(v); adj; adj = adj->tail) {
       G::Node<TEMP::Temp>* t = adj->head;
@@ -341,6 +357,7 @@ namespace {
       freezeWorklist = G::minusNodeList(freezeWorklist, new G::NodeList<TEMP::Temp>(u, nullptr));
       spillWorklist = new G::NodeList<TEMP::Temp>(u, spillWorklist);
     }
+    AssertNode(u);
   }
 
   void AddEdge(G::Node<TEMP::Temp>* u, G::Node<TEMP::Temp>* v) {
@@ -417,12 +434,117 @@ namespace {
       else {
         coloredNodes = new G::NodeList<TEMP::Temp>(n, coloredNodes);
         int c = *(okColors.begin());
+        assert(c != -1);
         node2color[n] = c;
       }
     }
     for (G::NodeList<TEMP::Temp>* head = coalescedNodes; head; head = head->tail) {
       G::Node<TEMP::Temp>* n = head->head;
-      node2color[n] = node2color[GetAlias(n)];
+      int color = node2color[GetAlias(n)];
+      AssertNode(n);
+      AssertNode(GetAlias(n));
+      assert(color != -1);
+      node2color[n] = color;
+    }
+  }
+
+  void RewriteProgram(F::Frame* f) {
+    std::string fs = f->GetName()->Name() + "_framesize";
+    for (; spilledNodes; spilledNodes = spilledNodes->tail) {
+      G::Node<TEMP::Temp>* nodeToSpill = spilledNodes->head;
+      TEMP::Temp* tempToSpill = nodeToSpill->NodeInfo();
+      assert(!TEMP::inTempList(tempToSpill, F::allocatableRegisters())); // A machine register should never be spilled
+      AS::Instr* spilledInstr = nullptr;
+      F::Access* access = f->AllocLocal(true);
+      int offset = f->GetSize(); // Now the size is the offset of certain variable in frame
+      while ((spilledInstr = findSpilledInstr(instrVector, tempToSpill)) != nullptr) {
+        // We have found an instruction which includes a use of the "tempToSpill"
+        TEMP::Temp* newTemp = TEMP::Temp::NewTemp();
+        TEMP::TempList* def = spilledInstr->GetDef();
+        TEMP::TempList* use = spilledInstr->GetUse();
+
+        if (TEMP::inTempList(tempToSpill, use)) {
+          // This instruction will use the "tempToSpill"
+          std::string assem = "movq (" + fs + "-" + std::to_string(offset) + ")(%rsp), `d0";
+          AS::OperInstr* newInstr = new AS::OperInstr(assem, new TEMP::TempList(newTemp, nullptr), nullptr, new AS::Targets(nullptr));
+          addBefore(instrVector, spilledInstr, newInstr);
+          TEMP::replaceTemps(use, tempToSpill, newTemp); // Replace the spilled temp with the new one
+        }
+
+        if (TEMP::inTempList(tempToSpill, def)) {
+          // This instruction will def the "tempToSpill"
+          std::string assem = "movq `s0, (" + fs + "-" + std::to_string(offset) + ")(%rsp)";
+          AS::OperInstr* newInstr = new AS::OperInstr(assem, nullptr, new TEMP::TempList(newTemp, nullptr), new AS::Targets(nullptr));
+          addAfter(instrVector, spilledInstr, newInstr);
+          TEMP::replaceTemps(def, tempToSpill, newTemp);
+        }
+
+        assert(!TEMP::inTempList(tempToSpill, use) && !TEMP::inTempList(tempToSpill, def));
+      }
+    }
+    assert(!spilledNodes);
+  }
+
+  void addBefore(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr) {
+    std::vector<AS::Instr *>::iterator it;
+    for (it = iVector.begin(); it != iVector.end(); ++it) {
+      if ((*it) == pos)
+        break;
+    }
+    if (it == iVector.end())
+      assert(0);
+    iVector.insert(it, newInstr);
+  }
+
+  void addAfter(std::vector<AS::Instr *>& iVector, AS::Instr* pos, AS::Instr* newInstr) {
+    std::vector<AS::Instr *>::iterator it;
+    bool found = false;
+    for (it = iVector.begin(); it != iVector.end(); ++it) {
+      if ((*it) == pos) {
+        ++it;
+        found = true;
+        break;
+      }
+    }
+    if (found == false)
+      assert(0);
+    iVector.insert(it, newInstr);
+  }
+
+  AS::Instr* findSpilledInstr(std::vector<AS::Instr *>& iVector, TEMP::Temp* spilledTemp) {
+    for (std::vector<AS::Instr *>::iterator it = iVector.begin(); it != iVector.end(); ++it) {
+      TEMP::TempList* def = (*it)->GetDef();
+      TEMP::TempList* use = (*it)->GetUse();
+      if (TEMP::inTempList(spilledTemp, def) || TEMP::inTempList(spilledTemp, use)) {
+        return (*it);
+      }
+    }
+    return nullptr;
+  }
+
+  TEMP::Map* AssignRegisters() {
+    TEMP::Map* result = TEMP::Map::Empty();
+    result->Enter(F::SP(), new std::string("%rsp"));
+    G::NodeList<TEMP::Temp>* nodes = liveGraph.graph->Nodes();
+    for (; nodes; nodes = nodes->tail) {
+      int color = node2color[nodes->head];
+      assert(color != -1);
+      result->Enter(nodes->head->NodeInfo(), F::color2register(color));
+    }
+    return result;
+  }
+
+  void AssertNode(G::Node<TEMP::Temp>* n) {
+    if (!G::inNodeList((n), coalescedNodes) &&
+        !G::inNodeList((n), precolored) &&
+        !G::inNodeList((n), simplifyWorklist) &&
+        !G::inNodeList((n), freezeWorklist) &&
+        !G::inNodeList((n), spillWorklist) &&
+        !G::inNodeList((n), spilledNodes) &&
+        !G::inNodeList((n), coloredNodes) &&
+        !G::inNodeList((n), selectStack)) {
+          std::cerr << "Unknown node" << std::endl;
+          assert(0);
     }
   }
 }

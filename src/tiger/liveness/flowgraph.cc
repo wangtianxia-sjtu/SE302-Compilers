@@ -35,7 +35,7 @@ G::Graph<AS::Instr>* AssemFlowGraph(AS::InstrList* il, F::Frame* f) {
   for (std::size_t i = 0; i < s; ++i) {
     G::Node<AS::Instr>* curNode = graph->NewNode(instrList[i]);
     nodes.push_back(curNode);
-    if (instrList[i]->kind == AS::Instr::Kind::OPER) {
+    if (instrList[i]->kind == AS::Instr::Kind::LABEL) {
       TEMP::Label* l = static_cast<AS::LabelInstr*>(instrList[i])->label;
       label2node[l] = curNode;
     }

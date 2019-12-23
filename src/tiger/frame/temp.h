@@ -55,6 +55,25 @@ class LabelList {
   LabelList(Label *h, LabelList *t) : head(h), tail(t) {}
 };
 
+inline bool inTempList(Temp* temp, TempList* tempList) {
+  for (; tempList; tempList = tempList->tail) {
+    if (temp == tempList->head)
+      return true;
+  }
+  return false;
+}
+
+inline void replaceTemps(TempList* tempList, Temp* oldTemp, Temp* newTemp) {
+  bool replace = false;
+  for (; tempList; tempList = tempList->tail) {
+    if (tempList->head == oldTemp) {
+      tempList->head = newTemp;
+      replace = true;
+    }
+  }
+  assert(replace);
+}
+
 }  // namespace TEMP
 
 #endif

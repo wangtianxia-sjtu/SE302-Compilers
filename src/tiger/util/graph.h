@@ -243,7 +243,7 @@ void Graph<T>::Show(FILE* out, NodeList<T>* p, void showInfo(T*)) {
 }
 
 template <class T>
-bool inNodeList(G::Node<T>* node, G::NodeList<T>* list) {
+inline bool inNodeList(G::Node<T>* node, G::NodeList<T>* list) {
   assert(node);
   for (G::NodeList<T>* h = list; h; h = h->tail) {
     if (h->head == node)
@@ -253,7 +253,7 @@ bool inNodeList(G::Node<T>* node, G::NodeList<T>* list) {
 }
 
 template <class T>
-G::NodeList<T>* unionNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
+inline G::NodeList<T>* unionNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
   G::NodeList<T>* result = nullptr;
   for (; l1; l1 = l1->tail) {
     if (!inNodeList(l1->head, result)) {
@@ -269,7 +269,7 @@ G::NodeList<T>* unionNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
 }
 
 template <class T>
-G::NodeList<T>* minusNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
+inline G::NodeList<T>* minusNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
   G::NodeList<T>* result = nullptr;
   for (G::NodeList<T>* head = l1; head; head = head->tail) {
     assert(head->head);

@@ -53,7 +53,7 @@ AS::InstrList* Codegen(F::Frame* f, T::StmList* stmList) {
 
   list = iList;
   iList = last = nullptr;
-  list = naiveRegAlloc(f, list);
+  // list = naiveRegAlloc(f, list);
   fs = "";
   return F::F_procEntryExit2(list);
 }
@@ -204,7 +204,7 @@ namespace {
         T::NameExp* funcExp = static_cast<T::NameExp *>(callExp->fun);
         TEMP::TempList* argsTemps = munchArgs(callExp->args);
         std::string instr = "call " + funcExp->name->Name() + "@PLT";
-        emit(new AS::OperInstr(instr, L(F::RV(), F::callersaves()), argsTemps, new AS::Targets(nullptr)));
+        emit(new AS::OperInstr(instr, F::notCalleesaves(), argsTemps, new AS::Targets(nullptr)));
         emit(new AS::MoveInstr("movq `s0, `d0", L(r, nullptr), L(F::RV(), nullptr)));
         return r;
       }

@@ -25,6 +25,7 @@ TEMP::TempList* specialregs();
 TEMP::TempList* argregs();
 TEMP::TempList* calleesaves();
 TEMP::TempList* callersaves();
+TEMP::TempList* notCalleesaves();
 
 TEMP::Temp* SP();
 TEMP::Temp* FP();
@@ -44,6 +45,7 @@ AS::InstrList* F_procEntryExit2(AS::InstrList* body); // P215 TODO
 AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269 TODO
 
 int defaultRegisterColor(TEMP::Temp* t);
+std::string* color2register(int color);
 
 
 class Frame {
