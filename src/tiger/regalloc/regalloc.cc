@@ -43,7 +43,7 @@ namespace {
   void RewriteProgram(F::Frame* f);
   G::NodeList<TEMP::Temp>* Adjacent(G::Node<TEMP::Temp>* n);
   void DecrementDegree(G::Node<TEMP::Temp>* n);
-  void FreezeMoves(G::Node<TEMP::Temp>* n);
+  void FreezeMoves(G::Node<TEMP::Temp>* u);
   void AddWorkList(G::Node<TEMP::Temp>* n);
   bool OK(G::Node<TEMP::Temp>* t, G::Node<TEMP::Temp>* r);
   bool Conservative(G::NodeList<TEMP::Temp>* nodes);
@@ -193,10 +193,12 @@ namespace {
   }
 
   bool MoveRelated(G::Node<TEMP::Temp>* n) {
+    assert(n);
     return NodeMoves(n) != nullptr;
   }
 
   LIVE::MoveList* NodeMoves(G::Node<TEMP::Temp>* n) {
+    assert(n);
     return LIVE::intersectMoveList(node2moveList[n], 
                                   LIVE::unionMoveList(activeMoves, worklistMoves));
   }
@@ -212,6 +214,7 @@ namespace {
   }
 
   void DecrementDegree(G::Node<TEMP::Temp>* n) {
+    assert(n);
     assert(node2degree.find(n) != node2degree.end());
     int oldDegree = node2degree[n];
     node2degree[n]--;
@@ -268,7 +271,7 @@ namespace {
       AddWorkList(u);
       AddWorkList(v);
     }
-    else if ((G::inNodeList(u, precolored) && OK(v, u)) // Note: OK is implemented differently from text book
+    else if ((G::inNodeList(u, precolored) && OK(v, u)) // Note: OK is implemented differently from the text book
     || (!G::inNodeList(u, precolored) && Conservative(G::unionNodeList(Adjacent(u), Adjacent(v))))) {
       coalescedMoves = new LIVE::MoveList(x, y, coalescedMoves);
       Combine(u, v);
@@ -288,6 +291,7 @@ namespace {
   }
 
   void AddWorkList(G::Node<TEMP::Temp>* n) {
+    assert(n);
     if (!G::inNodeList(n, precolored) && !MoveRelated(n) && node2degree[n] < F::K) {
       freezeWorklist = G::minusNodeList(freezeWorklist, new G::NodeList<TEMP::Temp>(n, nullptr));
       simplifyWorklist = new G::NodeList<TEMP::Temp>(n, simplifyWorklist);
@@ -295,7 +299,8 @@ namespace {
   }
 
   bool OK(G::Node<TEMP::Temp>* t, G::Node<TEMP::Temp>* r) {
-    // Note: OK is implemented differently from text book
+    // Note: OK is implemented differently from the text book
+    assert(t && r);
     for (G::NodeList<TEMP::Temp>* adj = Adjacent(t); adj; adj = adj->tail) {
       G::Node<TEMP::Temp>* h = adj->head;
       if (!(node2degree[h] < F::K) || G::inNodeList(h, precolored) || G::inNodeList(h, r->Adj())) {
@@ -317,6 +322,7 @@ namespace {
   }
 
   void Combine(G::Node<TEMP::Temp>* u, G::Node<TEMP::Temp>* v) {
+    assert(u && v);
     if (G::inNodeList(v, freezeWorklist)) {
       freezeWorklist = G::minusNodeList(freezeWorklist, new G::NodeList<TEMP::Temp>(v, nullptr));
     }
@@ -338,6 +344,7 @@ namespace {
   }
 
   void AddEdge(G::Node<TEMP::Temp>* u, G::Node<TEMP::Temp>* v) {
+    assert(u && v);
     if (!G::inNodeList(u, v->Adj()) && u != v) {
       if (!G::inNodeList(u, precolored)) {
         G::Graph<TEMP::Temp>::AddEdge(u, v);
@@ -347,6 +354,75 @@ namespace {
         G::Graph<TEMP::Temp>::AddEdge(v, u);
         node2degree[v]++;
       }
+    }
+  }
+
+  void Freeze() {
+    G::Node<TEMP::Temp>* u = freezeWorklist->head;
+    freezeWorklist = freezeWorklist->tail;
+    simplifyWorklist = new G::NodeList<TEMP::Temp>(u, simplifyWorklist);
+    FreezeMoves(u);
+  }
+
+  void FreezeMoves(G::Node<TEMP::Temp>* u) {
+    assert(u);
+    for (LIVE::MoveList* m = NodeMoves(u); m; m = m->tail) {
+      G::Node<TEMP::Temp>* x = m->src;
+      G::Node<TEMP::Temp>* y = m->dst;
+
+      G::Node<TEMP::Temp>* v;
+      if (GetAlias(y) == GetAlias(u)) {
+        v = GetAlias(x);
+      }
+      else {
+        v = GetAlias(y);
+      }
+      activeMoves = LIVE::minusMoveList(activeMoves, new LIVE::MoveList(m->src, m->dst, nullptr));
+      frozenMoves = new LIVE::MoveList(m->src, m->dst, frozenMoves);
+      if (!NodeMoves(v) && node2degree[v] < F::K) {
+        freezeWorklist = G::minusNodeList(freezeWorklist, new G::NodeList<TEMP::Temp>(v, nullptr));
+        simplifyWorklist = new G::NodeList<TEMP::Temp>(v, simplifyWorklist);
+      }
+    }
+  }
+
+  void SelectSpill() {
+    G::Node<TEMP::Temp>* m = spillWorklist->head;
+    spillWorklist = spillWorklist->tail;
+    simplifyWorklist = new G::NodeList<TEMP::Temp>(m, simplifyWorklist);
+    FreezeMoves(m);
+  }
+
+  void AssignColors() {
+    assert(spilledNodes == nullptr);
+    assert(coloredNodes == nullptr);
+    while (selectStack) {
+      G::Node<TEMP::Temp>* n = selectStack->head;
+      selectStack = selectStack->tail;
+      std::set<int> okColors;
+      for (int i = 0; i < F::K; ++i)
+        okColors.insert(i);
+      for (G::NodeList<TEMP::Temp>* adj = n->Succ(); adj; adj = adj->tail) {
+        // TODO
+        G::Node<TEMP::Temp>* w = adj->head;
+        if (G::inNodeList(GetAlias(w), G::unionNodeList(coloredNodes, precolored))) {
+          int color = node2color[GetAlias(w)];
+          assert(color != -1);
+          okColors.erase(color);
+        }
+      }
+      if (okColors.empty()) {
+        spilledNodes = new G::NodeList<TEMP::Temp>(n, spilledNodes);
+      }
+      else {
+        coloredNodes = new G::NodeList<TEMP::Temp>(n, coloredNodes);
+        int c = *(okColors.begin());
+        node2color[n] = c;
+      }
+    }
+    for (G::NodeList<TEMP::Temp>* head = coalescedNodes; head; head = head->tail) {
+      G::Node<TEMP::Temp>* n = head->head;
+      node2color[n] = node2color[GetAlias(n)];
     }
   }
 }
