@@ -60,6 +60,9 @@ namespace {
   AS::Instr* findSpilledInstr(std::vector<AS::Instr *>& iVector, TEMP::Temp* spilledTemp);
 
   void AssertNode(G::Node<TEMP::Temp>* n);
+  void AssertWorkList(LIVE::MoveList* l);
+
+  int length(G::NodeList<TEMP::Temp>* l);
 }
 
 namespace RA {
@@ -199,7 +202,9 @@ namespace {
           simplifyWorklist = new G::NodeList<TEMP::Temp>(node, simplifyWorklist);
         }
       }
+      AssertNode(node);
     }
+    AssertWorkList(worklistMoves);
   }
 
   bool MoveRelated(G::Node<TEMP::Temp>* n) {
@@ -214,6 +219,7 @@ namespace {
   }
 
   void Simplify() {
+    AssertWorkList(worklistMoves);
     G::Node<TEMP::Temp>* node = simplifyWorklist->head;
     simplifyWorklist = simplifyWorklist->tail;
     selectStack = new G::NodeList<TEMP::Temp>(node, selectStack);
@@ -221,6 +227,7 @@ namespace {
     for (; adj; adj = adj->tail) {
       DecrementDegree(adj->head);
     }
+    AssertNode(node);
   }
 
   void DecrementDegree(G::Node<TEMP::Temp>* n) {
@@ -238,6 +245,7 @@ namespace {
         simplifyWorklist = new G::NodeList<TEMP::Temp>(n, simplifyWorklist);
       }
     }
+    AssertNode(n);
   }
 
   void EnableMoves(G::NodeList<TEMP::Temp>* nodes) {
@@ -246,6 +254,8 @@ namespace {
         if (LIVE::inMoveList(m->src, m->dst, activeMoves)) {
           activeMoves = LIVE::minusMoveList(activeMoves, new LIVE::MoveList(m->src, m->dst, nullptr));
           worklistMoves = new LIVE::MoveList(m->src, m->dst, worklistMoves);
+          AssertNode(m->src);
+          AssertNode(m->dst);
         }
       }
     }
@@ -258,6 +268,7 @@ namespace {
   }
 
   void Coalesce() {
+    AssertWorkList(worklistMoves);
     G::Node<TEMP::Temp>* x, *y, *u, *v;
     x = worklistMoves->src;
     y = worklistMoves->dst;
@@ -306,16 +317,20 @@ namespace {
   }
 
   void AddWorkList(G::Node<TEMP::Temp>* n) {
+    AssertNode(n);
     assert(n);
     if (!G::inNodeList(n, precolored) && !MoveRelated(n) && node2degree[n] < F::K) {
       freezeWorklist = G::minusNodeList(freezeWorklist, new G::NodeList<TEMP::Temp>(n, nullptr));
       simplifyWorklist = new G::NodeList<TEMP::Temp>(n, simplifyWorklist);
     }
+    AssertNode(n);
   }
 
   bool OK(G::Node<TEMP::Temp>* t, G::Node<TEMP::Temp>* r) {
     // Note: OK is implemented differently from the text book
     assert(t && r);
+    AssertNode(t);
+    AssertNode(r);
     for (G::NodeList<TEMP::Temp>* adj = Adjacent(t); adj; adj = adj->tail) {
       G::Node<TEMP::Temp>* h = adj->head;
       if (!(node2degree[h] < F::K) || G::inNodeList(h, precolored) || G::inNodeList(h, r->Adj())) {
@@ -337,7 +352,11 @@ namespace {
   }
 
   void Combine(G::Node<TEMP::Temp>* u, G::Node<TEMP::Temp>* v) {
+    AssertWorkList(worklistMoves);
+    std::cerr << "worklistMoves: " << worklistMoves << std::endl;
     assert(u && v);
+    std::cerr << "freezeWorklist: " << length(freezeWorklist) << std::endl;
+    std::cerr << "coalescedNodes: " << length(coalescedNodes) << std::endl;
     if (G::inNodeList(v, freezeWorklist)) {
       freezeWorklist = G::minusNodeList(freezeWorklist, new G::NodeList<TEMP::Temp>(v, nullptr));
     }
@@ -345,9 +364,15 @@ namespace {
       spillWorklist = G::minusNodeList(spillWorklist, new G::NodeList<TEMP::Temp>(v, nullptr));
     }
     coalescedNodes = new G::NodeList<TEMP::Temp>(v, coalescedNodes);
+    std::cerr << "freezeWorklist: " << length(freezeWorklist) << std::endl;
+    std::cerr << "coalescedNodes: " << length(coalescedNodes) << std::endl;
+    std::cerr << "v: " << v << std::endl;
+    std::cerr << "worklistMoves: " << worklistMoves << std::endl;
     node2alias[v] = u;
     AssertNode(u);
+    // AssertWorkList(worklistMoves);
     node2moveList[u] = LIVE::unionMoveList(node2moveList[u], node2moveList[v]); // TODO: nodeMove?
+    AssertWorkList(worklistMoves);
     for (G::NodeList<TEMP::Temp>* adj = Adjacent(v); adj; adj = adj->tail) {
       G::Node<TEMP::Temp>* t = adj->head;
       AddEdge(t, u);
@@ -358,6 +383,7 @@ namespace {
       spillWorklist = new G::NodeList<TEMP::Temp>(u, spillWorklist);
     }
     AssertNode(u);
+    AssertWorkList(worklistMoves);
   }
 
   void AddEdge(G::Node<TEMP::Temp>* u, G::Node<TEMP::Temp>* v) {
@@ -372,6 +398,8 @@ namespace {
         node2degree[v]++;
       }
     }
+    AssertNode(u);
+    AssertNode(v);
   }
 
   void Freeze() {
@@ -379,6 +407,7 @@ namespace {
     freezeWorklist = freezeWorklist->tail;
     simplifyWorklist = new G::NodeList<TEMP::Temp>(u, simplifyWorklist);
     FreezeMoves(u);
+    AssertNode(u);
   }
 
   void FreezeMoves(G::Node<TEMP::Temp>* u) {
@@ -386,6 +415,9 @@ namespace {
     for (LIVE::MoveList* m = NodeMoves(u); m; m = m->tail) {
       G::Node<TEMP::Temp>* x = m->src;
       G::Node<TEMP::Temp>* y = m->dst;
+
+      AssertNode(x);
+      AssertNode(y);
 
       G::Node<TEMP::Temp>* v;
       if (GetAlias(y) == GetAlias(u)) {
@@ -535,6 +567,7 @@ namespace {
   }
 
   void AssertNode(G::Node<TEMP::Temp>* n) {
+    static std::map<G::Node<TEMP::Temp>*, int> m;
     if (!G::inNodeList((n), coalescedNodes) &&
         !G::inNodeList((n), precolored) &&
         !G::inNodeList((n), simplifyWorklist) &&
@@ -543,8 +576,53 @@ namespace {
         !G::inNodeList((n), spilledNodes) &&
         !G::inNodeList((n), coloredNodes) &&
         !G::inNodeList((n), selectStack)) {
-          std::cerr << "Unknown node" << std::endl;
+          std::cerr << "Unknown node: " << n << std::endl;
+          if (m.find(n) != m.end())
+            std::cerr << "Used to belong to: " << m[n] << std::endl;
+          else
+            std::cerr << "Not seen before" << std::endl;
           assert(0);
     }
+    else {
+      if (G::inNodeList((n), coalescedNodes)) {
+        m[n] = 0;
+      }
+      if (G::inNodeList((n), precolored)) {
+        m[n] = 1;
+      }
+      if (G::inNodeList((n), simplifyWorklist)) {
+        m[n] = 2;
+      }
+      if (G::inNodeList((n), freezeWorklist)) {
+        m[n] = 3;
+      }
+      if (G::inNodeList((n), spillWorklist)) {
+        m[n] = 4;
+      }
+      if (G::inNodeList((n), spilledNodes)) {
+        m[n] = 5;
+      }
+      if (G::inNodeList((n), coloredNodes)) {
+        m[n] = 6;
+      }
+      if (G::inNodeList((n), selectStack)) {
+        m[n] = 7;
+      }
+    }
+  }
+
+  void AssertWorkList(LIVE::MoveList* l) {
+    for (; l; l = l->tail) {
+      AssertNode(l->src);
+      AssertNode(l->dst);
+    }
+  }
+
+  int length(G::NodeList<TEMP::Temp>* l) {
+    int i = 0;
+    for(; l; l = l->tail) {
+      ++i;
+    }
+    return i;
   }
 }

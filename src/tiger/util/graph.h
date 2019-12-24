@@ -277,6 +277,7 @@ inline G::NodeList<T>* minusNodeList(G::NodeList<T>* l1, G::NodeList<T>* l2) {
       result = new G::NodeList<T>(head->head, result);
     }
   }
+  return result;
 }
 
 }  // namespace G
