@@ -391,6 +391,21 @@ std::string* color2register(int color) {
   return nullptr;
 }
 
+// Returns true when this move instruction can be omitted
+bool checkMoveInstr(std::string instr) {
+  std::size_t firstPos = instr.find_first_of('%');
+  std::size_t secondPos = instr.find_first_of('%', firstPos+1);
+  assert(firstPos != std::string::npos && secondPos != std::string::npos);
+  if (instr[firstPos+1] == 'r' && (instr[firstPos+2] == '8' || instr[firstPos+2] == '9')) {
+    return (instr[firstPos+1] == instr[secondPos+1] && instr[firstPos+2] == instr[secondPos+2]);
+  }
+  else {
+    return (instr[firstPos+1] == instr[secondPos+1] && 
+            instr[firstPos+2] == instr[secondPos+2] &&
+            instr[firstPos+3] == instr[secondPos+3]);
+  }
+}
+
 class X64Frame : public Frame {
   // TODO: Put your codes here (lab6).
   private:

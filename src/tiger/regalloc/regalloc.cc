@@ -353,10 +353,7 @@ namespace {
 
   void Combine(G::Node<TEMP::Temp>* u, G::Node<TEMP::Temp>* v) {
     AssertWorkList(worklistMoves);
-    std::cerr << "worklistMoves: " << worklistMoves << std::endl;
     assert(u && v);
-    std::cerr << "freezeWorklist: " << length(freezeWorklist) << std::endl;
-    std::cerr << "coalescedNodes: " << length(coalescedNodes) << std::endl;
     if (G::inNodeList(v, freezeWorklist)) {
       freezeWorklist = G::minusNodeList(freezeWorklist, new G::NodeList<TEMP::Temp>(v, nullptr));
     }
@@ -364,14 +361,9 @@ namespace {
       spillWorklist = G::minusNodeList(spillWorklist, new G::NodeList<TEMP::Temp>(v, nullptr));
     }
     coalescedNodes = new G::NodeList<TEMP::Temp>(v, coalescedNodes);
-    std::cerr << "freezeWorklist: " << length(freezeWorklist) << std::endl;
-    std::cerr << "coalescedNodes: " << length(coalescedNodes) << std::endl;
-    std::cerr << "v: " << v << std::endl;
-    std::cerr << "worklistMoves: " << worklistMoves << std::endl;
     node2alias[v] = u;
     AssertNode(u);
-    // AssertWorkList(worklistMoves);
-    node2moveList[u] = LIVE::unionMoveList(node2moveList[u], node2moveList[v]); // TODO: nodeMove?
+    node2moveList[u] = LIVE::unionMoveList(node2moveList[u], node2moveList[v]);
     AssertWorkList(worklistMoves);
     for (G::NodeList<TEMP::Temp>* adj = Adjacent(v); adj; adj = adj->tail) {
       G::Node<TEMP::Temp>* t = adj->head;
@@ -452,7 +444,6 @@ namespace {
       for (int i = 0; i < F::K; ++i)
         okColors.insert(i);
       for (G::NodeList<TEMP::Temp>* adj = n->Succ(); adj; adj = adj->tail) {
-        // TODO
         G::Node<TEMP::Temp>* w = adj->head;
         if (G::inNodeList(GetAlias(w), G::unionNodeList(coloredNodes, precolored))) {
           int color = node2color[GetAlias(w)];

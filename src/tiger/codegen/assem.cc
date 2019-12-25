@@ -1,4 +1,5 @@
 #include "tiger/codegen/assem.h"
+#include "tiger/frame/frame.h"
 
 namespace {
 
@@ -90,7 +91,8 @@ void MoveInstr::Print(FILE* out, TEMP::Map* m) const {
     }
   }
   std::string result = format(this->assem, this->dst, this->src, nullptr, m);
-  fprintf(out, "%s\n", result.c_str());
+  if (!F::checkMoveInstr(result))
+    fprintf(out, "%s\n", result.c_str());
 }
 
 void InstrList::Print(FILE* out, TEMP::Map* m) const {

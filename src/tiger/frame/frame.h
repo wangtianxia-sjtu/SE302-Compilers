@@ -47,6 +47,8 @@ AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body); // P267-269 TODO
 int defaultRegisterColor(TEMP::Temp* t);
 std::string* color2register(int color);
 
+bool checkMoveInstr(std::string instr);
+
 
 class Frame {
   // Base class, see P138

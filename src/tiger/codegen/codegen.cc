@@ -53,7 +53,7 @@ AS::InstrList* Codegen(F::Frame* f, T::StmList* stmList) {
 
   list = iList;
   iList = last = nullptr;
-  // list = naiveRegAlloc(f, list);
+  // list = naiveRegAlloc(f, list); // Function naiveRegAlloc will spill all the temporaries to the stack. Uncomment this line for a contrast.
   fs = "";
   return F::F_procEntryExit2(list);
 }
