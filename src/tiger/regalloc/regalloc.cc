@@ -33,6 +33,11 @@ namespace {
   std::vector<AS::Instr *> toVector(AS::InstrList* iList);
   AS::InstrList* toList(const std::vector<AS::Instr *>& iVector);
 
+  std::vector<G::Node<TEMP::Temp> *> toTempVector(G::NodeList<TEMP::Temp>* templist);
+  G::NodeList<TEMP::Temp>* toTempList(const std::vector<G::Node<TEMP::Temp> *>& tempVector);
+  G::Node<TEMP::Temp>* selectNodeFromSpillWorklist();
+
+
   void Build();
   void MakeWorklist();
   void Simplify();
@@ -128,6 +133,41 @@ namespace {
     for (std::vector<AS::Instr *>::const_reverse_iterator cri = iVector.crbegin(); cri != iVector.crend(); ++cri) {
       result = new AS::InstrList(*cri, result);
     }
+    return result;
+  }
+
+  std::vector<G::Node<TEMP::Temp> *> toTempVector(G::NodeList<TEMP::Temp>* templist) {
+    std::vector<G::Node<TEMP::Temp> *> result;
+    while (templist) {
+      result.push_back(templist->head);
+      templist = templist->tail;
+    }
+    return result;
+  }
+
+  G::NodeList<TEMP::Temp>* toTempList(const std::vector<G::Node<TEMP::Temp> *>& tempVector) {
+    G::NodeList<TEMP::Temp>* result = nullptr;
+    for (std::vector<G::Node<TEMP::Temp> *>::const_reverse_iterator cri = tempVector.crbegin(); cri != tempVector.crend(); ++cri) {
+      result = new G::NodeList<TEMP::Temp>(*cri, result);
+    }
+    return result;
+  }
+
+  G::Node<TEMP::Temp>* selectNodeFromSpillWorklist() {
+    std::vector<G::Node<TEMP::Temp> *> tempVector = toTempVector(spillWorklist);
+    std::vector<G::Node<TEMP::Temp> *>::iterator target = tempVector.begin();
+    int maxDegree = 0;
+    for (std::vector<G::Node<TEMP::Temp> *>::iterator it = tempVector.begin(); it != tempVector.end(); ++it) {
+      G::Node<TEMP::Temp>* node = *it;
+      if (node->Degree() > maxDegree) {
+        maxDegree = node->Degree();
+        target = it;
+      }
+      // assert(!TEMP::inTempList(node->NodeInfo(), F::allocatableRegisters()));
+    }
+    G::Node<TEMP::Temp>* result = *target;
+    tempVector.erase(target);
+    spillWorklist = toTempList(tempVector);
     return result;
   }
 
@@ -235,7 +275,7 @@ namespace {
     assert(node2degree.find(n) != node2degree.end());
     int oldDegree = node2degree[n];
     node2degree[n]--;
-    if (oldDegree == F::K /*&& node2color[n] == -1*/) { // TODO: node2color[n] == -1? Why?
+    if (oldDegree == F::K && node2color[n] == -1) {
       EnableMoves(new G::NodeList<TEMP::Temp>(n, Adjacent(n)));
       spillWorklist = G::minusNodeList(spillWorklist, new G::NodeList<TEMP::Temp>(n, nullptr));
       if (MoveRelated(n)) {
@@ -428,8 +468,9 @@ namespace {
   }
 
   void SelectSpill() {
-    G::Node<TEMP::Temp>* m = spillWorklist->head;
-    spillWorklist = spillWorklist->tail;
+    G::Node<TEMP::Temp>* m = selectNodeFromSpillWorklist();
+    // G::Node<TEMP::Temp>* m = spillWorklist->head;
+    // spillWorklist = spillWorklist->tail;
     simplifyWorklist = new G::NodeList<TEMP::Temp>(m, simplifyWorklist);
     FreezeMoves(m);
   }
