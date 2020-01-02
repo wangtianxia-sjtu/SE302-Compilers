@@ -159,8 +159,8 @@ namespace {
     int maxDegree = 0;
     for (std::vector<G::Node<TEMP::Temp> *>::iterator it = tempVector.begin(); it != tempVector.end(); ++it) {
       G::Node<TEMP::Temp>* node = *it;
-      if (node->Degree() > maxDegree) {
-        maxDegree = node->Degree();
+      if (node2degree[node] > maxDegree) {
+        maxDegree = node2degree[node];
         target = it;
       }
     }
