@@ -163,7 +163,6 @@ namespace {
         maxDegree = node->Degree();
         target = it;
       }
-      // assert(!TEMP::inTempList(node->NodeInfo(), F::allocatableRegisters()));
     }
     G::Node<TEMP::Temp>* result = *target;
     tempVector.erase(target);
@@ -275,14 +274,17 @@ namespace {
     assert(node2degree.find(n) != node2degree.end());
     int oldDegree = node2degree[n];
     node2degree[n]--;
-    if (oldDegree == F::K && node2color[n] == -1) {
+    if (oldDegree == F::K) {
       EnableMoves(new G::NodeList<TEMP::Temp>(n, Adjacent(n)));
-      spillWorklist = G::minusNodeList(spillWorklist, new G::NodeList<TEMP::Temp>(n, nullptr));
-      if (MoveRelated(n)) {
-        freezeWorklist = new G::NodeList<TEMP::Temp>(n, freezeWorklist);
-      }
-      else {
-        simplifyWorklist = new G::NodeList<TEMP::Temp>(n, simplifyWorklist);
+      if (node2color[n] == -1) {
+        // Only non-precolored nodes can be removed from spillWorklist
+        spillWorklist = G::minusNodeList(spillWorklist, new G::NodeList<TEMP::Temp>(n, nullptr));
+        if (MoveRelated(n)) {
+          freezeWorklist = new G::NodeList<TEMP::Temp>(n, freezeWorklist);
+        }
+        else {
+          simplifyWorklist = new G::NodeList<TEMP::Temp>(n, simplifyWorklist);
+        }
       }
     }
     AssertNode(n);
