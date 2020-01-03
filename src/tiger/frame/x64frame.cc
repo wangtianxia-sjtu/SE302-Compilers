@@ -435,16 +435,13 @@ class X64Frame : public Frame {
     }
 
   public:
-    std::string label; // name->Name()? TBD
     TEMP::Label* name;
     AccessList* formalList; // formal parameters list
-    AccessList* localList; // the number of locals allocated so far. TBD
     int frameSize;
     T::Stm* prologue; // view shift, move parameters to other places
     int maxArgNumber;
 
     X64Frame(TEMP::Label* name, U::BoolList* formals) : Frame(X64), name(name) {
-      localList = nullptr;
       formalList = nullptr;
       frameSize = 0;
       maxArgNumber = 0;
@@ -591,20 +588,12 @@ class X64Frame : public Frame {
       }
     }
 
-    std::string GetLabel() const override {
-      return label;
-    }
-
     TEMP::Label* GetName() const override {
       return name;
     }
 
     AccessList* GetFormalList() const override {
       return formalList;
-    }
-
-    AccessList* GetLocalList() const override {
-      return localList;
     }
 
     T::Stm* GetPrologue() const override {

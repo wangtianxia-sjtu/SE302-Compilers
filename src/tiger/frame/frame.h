@@ -58,10 +58,8 @@ class Frame {
     Kind kind;
 
     Frame(Kind kind) : kind(kind) {}
-    virtual std::string GetLabel() const = 0;
     virtual TEMP::Label* GetName() const = 0;
     virtual AccessList* GetFormalList() const = 0;
-    virtual AccessList* GetLocalList() const = 0;
     virtual Access* AllocLocal(bool escape) = 0;
     virtual T::Stm* GetPrologue() const = 0;
     virtual int GetSize() const = 0;
