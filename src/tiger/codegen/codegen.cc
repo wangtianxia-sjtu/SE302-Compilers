@@ -8,6 +8,7 @@
 namespace {
   AS::InstrList* iList = nullptr;
   AS::InstrList* last = nullptr;
+  F::Frame* targetFrame = nullptr;
   std::string fs;
 
   std::map<TEMP::Temp*, int> temp2offset;
@@ -46,6 +47,8 @@ AS::InstrList* Codegen(F::Frame* f, T::StmList* stmList) {
   AS::InstrList* list;
   T::StmList* sl;
 
+  targetFrame = f;
+
   fs = f->GetName()->Name() + "_framesize"; // An assembly-language constant, see P213
   for (sl = stmList; sl; sl = sl->tail) {
     munchStm(sl->head);
@@ -55,6 +58,7 @@ AS::InstrList* Codegen(F::Frame* f, T::StmList* stmList) {
   iList = last = nullptr;
   // list = naiveRegAlloc(f, list); // Function naiveRegAlloc will spill all the temporaries to the stack. Uncomment this line for a contrast.
   fs = "";
+  targetFrame = nullptr;
   return F::F_procEntryExit2(list);
 }
 
@@ -252,6 +256,7 @@ namespace {
     int count = 0;
     TEMP::TempList* argsregs = F::argregs();
     TEMP::TempList* result = nullptr;
+    int offsetFromStackPointer = 0;
     for (T::ExpList* head = args; head; head = head->tail) {
       TEMP::Temp* arg = munchExp(head->head);
       if (count <= 5) {
@@ -260,11 +265,14 @@ namespace {
         argsregs = argsregs->tail;
       }
       else {
-        assert(0); // Not covered in testcases
-        emit(new AS::OperInstr("pushq `s0", nullptr, L(arg, nullptr), new AS::Targets(nullptr))); // No need to consider F::SP() here
+        std::string s = "movq `s0, " + std::to_string(offsetFromStackPointer) + "(%rsp)";
+        emit(new AS::OperInstr(s, nullptr, L(arg, nullptr), new AS::Targets(nullptr)));
+        offsetFromStackPointer += F::wordSize;
       }
       count++;
     }
+    if (count > targetFrame->GetMaxArgNumber())
+      targetFrame->SetMaxArgNumber(count);
     return result;
   }
 

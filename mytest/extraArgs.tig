@@ -1,0 +1,8 @@
+let
+
+function quicksort(left0:int, right1:int, left2:int, right3:int, left4:int, right5:int, left6:int, left7:int) = 
+		printi(left7)
+
+in
+    quicksort(100, 200, 300, 400, 500, 600, 700, 800)
+end

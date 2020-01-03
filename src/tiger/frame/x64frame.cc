@@ -441,11 +441,13 @@ class X64Frame : public Frame {
     AccessList* localList; // the number of locals allocated so far. TBD
     int frameSize;
     T::Stm* prologue; // view shift, move parameters to other places
+    int maxArgNumber;
 
     X64Frame(TEMP::Label* name, U::BoolList* formals) : Frame(X64), name(name) {
       localList = nullptr;
       formalList = nullptr;
       frameSize = 0;
+      maxArgNumber = 0;
 
       U::BoolList* formalsPtr = formals;
 
@@ -622,6 +624,14 @@ class X64Frame : public Frame {
         return new InRegAccess(TEMP::Temp::NewTemp());
       }
     }
+
+    int GetMaxArgNumber() const override {
+      return maxArgNumber;
+    }
+
+    void SetMaxArgNumber(int maxArgNumber) override {
+      this->maxArgNumber = maxArgNumber;
+    }
 };
 
 T::Exp* externalCall(std::string s, T::ExpList* args) {
@@ -685,11 +695,14 @@ AS::InstrList* F_procEntryExit2(AS::InstrList* body) {
 }
 
 AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body) {
+  int extraArgs = 0;
+  if (frame->GetMaxArgNumber() > 6)
+    extraArgs = frame->GetMaxArgNumber() - 6;
   std::string fs = frame->GetName()->Name() + "_framesize";
-  std::string prolog = ".set " + fs + "," + std::to_string(frame->GetSize()) + "\n";
+  std::string prolog = ".set " + fs + "," + std::to_string(frame->GetSize() + wordSize * extraArgs) + "\n";
   prolog = prolog + frame->GetName()->Name() + ":\n";
-  prolog = prolog + "subq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
-  std::string epilog = "addq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
+  prolog = prolog + "subq $" + std::to_string(frame->GetSize() + wordSize * extraArgs) + ",%rsp\n";
+  std::string epilog = "addq $" + std::to_string(frame->GetSize() + wordSize * extraArgs) + ",%rsp\n";
   epilog = epilog + "ret\n";
   return new AS::Proc(prolog, body, epilog);
 }

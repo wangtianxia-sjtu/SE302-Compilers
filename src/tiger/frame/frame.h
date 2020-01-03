@@ -65,6 +65,8 @@ class Frame {
     virtual Access* AllocLocal(bool escape) = 0;
     virtual T::Stm* GetPrologue() const = 0;
     virtual int GetSize() const = 0;
+    virtual int GetMaxArgNumber() const = 0;
+    virtual void SetMaxArgNumber(int maxArgNumber) = 0;
 };
 
 class Access {
