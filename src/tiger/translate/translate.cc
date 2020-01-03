@@ -487,7 +487,7 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
   else {
     // Add static link
     expList = new T::ExpList(staticLink, expList);
-    resultExp = new TR::ExExp(new T::CallExp(new T::NameExp(func), expList));
+    resultExp = new TR::ExExp(new T::CallExp(new T::NameExp(funEntry->label), expList));
   }
   return TR::ExpAndTy(resultExp, resultType);
 }
@@ -812,8 +812,9 @@ TR::Exp *FunctionDec::Translate(S::Table<E::EnvEntry> *venv,
       names.insert(name);
       TY::TyList* formals = make_formal_tylist(tenv, thisFun->params);
       U::BoolList* args = make_boollist(thisFun->params);
-      TR::Level* newLevel = TR::Level::NewLevel(level, thisFun->name, args);
-      E::FunEntry* newFunEntry = new E::FunEntry(newLevel, thisFun->name, formals, resultTy); // Pass thisFun->name as TEMP::Label*? TBD
+      TEMP::Label* label = TEMP::NewLabel();
+      TR::Level* newLevel = TR::Level::NewLevel(level, label, args);
+      E::FunEntry* newFunEntry = new E::FunEntry(newLevel, label, formals, resultTy);
       venv->Enter(thisFun->name, newFunEntry);
     }
     funHead = funHead->tail;

@@ -690,7 +690,7 @@ AS::Proc* F_procEntryExit3(Frame* frame, AS::InstrList* body) {
   prolog = prolog + frame->GetName()->Name() + ":\n";
   prolog = prolog + "subq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
   std::string epilog = "addq $" + std::to_string(frame->GetSize()) + ",%rsp\n";
-  epilog = epilog + "ret\n\n\n";
+  epilog = epilog + "ret\n";
   return new AS::Proc(prolog, body, epilog);
 }
 
